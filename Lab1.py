@@ -42,9 +42,9 @@ def get_exon_info(seq, exon_positions):
 
 #print(get_complement(SEQ_1))
 #print(SEQ_2)
-
-mRNA, coding_pc, comp_seq = get_exon_info(SEQ_2, EXONS)
-print(f'mRNA: {mRNA}')
-print(f'%coding: {coding_pc}')
-print(f'full sequence: {comp_seq}')
+if __name__ == "__main__":
+    mRNA, coding_pc, comp_seq = get_exon_info(SEQ_2, EXONS)
+    print(f'mRNA: {mRNA}')
+    print(f'%coding: {coding_pc}')
+    print(f'full sequence: {comp_seq}')
 

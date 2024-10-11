@@ -68,12 +68,13 @@ def cross_multiply(list1, list2):
     
     return return_list
 
+if __name__ == '__main__':
+    
+    #output_trimmed_fasta(FILE_PATH, WORKDIR)
+    #
+    # create_gene_data_info(DATA_FILE_PATH, WORKDIR)
 
-#output_trimmed_fasta(FILE_PATH, WORKDIR)
-#
-# create_gene_data_info(DATA_FILE_PATH, WORKDIR)
-
-list1 = range(1,6)
-list2 = make_powers_list(EXP, NUM)
-new_list = cross_multiply(list1, list2)
-print(new_list)
+    list1 = range(1,6)
+    list2 = make_powers_list(EXP, NUM)
+    new_list = cross_multiply(list1, list2)
+    print(new_list)
