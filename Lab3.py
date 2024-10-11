@@ -9,7 +9,10 @@ FIKK_FILEPATH = f'{WORKDIR}/FIKK_kinases.txt'
 DROS_FILEPATH = f'{WORKDIR}/drosophila.csv'
 
 CDN_LEN = 3
+
 HEADERS = ['Species','Seq','ID','Expression']
+SPECIES_1 = 'Drosophila melanogaster'
+SPECIES_2 = 'Drosophila simulans'
 
 def find_seq_content(seq, bases):
     seq = str(seq).upper()
@@ -112,8 +115,53 @@ def get_genes_by_species(gene_data, species, exclude = False):
         if gene_data[gene]['Species'] == species:
             if not exclude:
                 return_genes[gene] = gene_data[gene]
-                
+        else:
+            if exclude:
+                return_genes[gene] = gene_data[gene]
+              
+    return return_genes
 
+def get_genes_by_seq_len(gene_data, lower_limit = 0, upper_limit = None, exclude = False):
+    return_genes = {}
+    for gene in gene_data:
+        return_genes = filter_genes(return_genes,gene,len(gene_data[gene]['Seq']),lower_limit=lower_limit,upper_limit=upper_limit,exclude=exclude)
+
+    return return_genes
+
+def filter_genes(return_genes, gene, num, lower_limit = 0, upper_limit = None, exclude = False):
+    match = False
+    if num >= lower_limit:
+        if upper_limit != None:
+            if num <= upper_limit:
+                match = True
+        else:
+            match = True
+    if match:       
+        if not exclude:
+            return_genes[gene] = gene_data[gene]
+    else:
+        if exclude:
+            return_genes[gene] = gene_data[gene]
+    
+    return return_genes
+
+
+def get_genes_by_seq_content(gene_data, bases, lower_limit = 0, upper_limit = None, exclude = False):
+        return_genes = {}
+        for gene in gene_data:
+            base_content = find_seq_content(gene_data[gene]['Seq'], bases)
+            return_genes = filter_genes(return_genes,gene,base_content,lower_limit=lower_limit,upper_limit=upper_limit,exclude=exclude)
+
+        return return_genes
+
+def get_genes_by_expression(gene_data, bases, lower_limit = 0, upper_limit = None, exclude = False):
+    return_genes = {}
+    for gene in gene_data:
+        return_genes = filter_genes(return_genes,gene,gene_data[gene]['Expression'],lower_limit=lower_limit,upper_limit=upper_limit,exclude=exclude)
+
+#def get_genes_by_seq_name(gene_data,startswith)
+
+    return return_genes
 if __name__ == '__main__':
     # PROBLEM 1
     seqs = get_seqs_from_file(SEQ_FILE_PATH)
@@ -122,8 +170,19 @@ if __name__ == '__main__':
     # PROBLEM 2
     test_codon_function()
     fikk_kinases = get_seq_dict(FIKK_FILEPATH)
-    print_codons(fikk_kinases)
+    #print_codons(fikk_kinases)
 
     #PROBLEM 3
     gene_data = get_genes_data(DROS_FILEPATH, HEADERS)
-    
+    #By Species
+    genes = {**get_genes_by_species(gene_data, SPECIES_1), **get_genes_by_species(gene_data, SPECIES_2)}
+
+    #By seq len
+    genes = get_genes_by_seq_len(gene_data, lower_limit=90, upper_limit=110)
+
+    #By AT content
+    genes = get_genes_by_seq_content(gene_data,['A','T'],lower_limit=0.5)
+    #And expression
+    genes = get_genes_by_expression(genes,upper_limit=200)
+
+    print(genes.keys())
