@@ -16,6 +16,8 @@ def create_codon_table(bases, amino_acids):
     codon_table = dict(zip(codons, amino_acids))
     return codon_table
 
+CODON_TABLE = create_codon_table(BASES, AMINO_ACIDS)
+
 #creates a dict with a sequence for each gene
 def get_genes_from_fasta(filepath):
     try:
@@ -31,6 +33,8 @@ def get_genes_from_fasta(filepath):
                     current_gene = line.lstrip('>').strip()
                 else:
                     seq += line.strip().upper()
+            if current_gene != '':
+                genes_dict[current_gene] = seq
             return genes_dict
     except:
         print('failed to open fasta file:')
