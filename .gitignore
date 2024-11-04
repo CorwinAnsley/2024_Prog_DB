@@ -164,3 +164,4 @@ cython_debug/
 #data files
 data_files/
 BioProgPy/data/
+db/Lab4/LabCovid
