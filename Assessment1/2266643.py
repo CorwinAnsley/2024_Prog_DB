@@ -1,11 +1,12 @@
 import csv
 import argparse
+import re
 
 ### Apologies for the excessive and overly verbose comments, wanted to being absolutely sure that 
 ### there was not too few
 
 TEST_SAM = 'Toxo_chr8_subset.sam'
-TEST_CIGAR = '1S10M7887N89M'
+TEST_CIGAR = '1S10M7887N89M10N'
 
 #  Dict of which colum in the sam file the relevant data is stored
 SAM_COLUMNS = {'RNAME':2, 'POS':3, 'CIGAR':5, 'NH:i:x':-1}
@@ -33,31 +34,23 @@ def parse_sam(filepath):
 # returns the junctions form cigar string and position
 def get_junctions(cigar, pos):
     junction_list = []
-    
-    # This placeholder string holds section of the cigar string as we iterate over it
-    cigar_section = ''
 
-    for c in cigar:
-        # add digits to the placeholder
-        if c.isdigit():
-            cigar_section += str(c)
-        # if there's an 'M' we have a match
-        elif c == 'M':
-            # adjust the position and erase the placeholder string
-            pos += int(cigar_section)
-            cigar_section = ''
-            # if there's an 'N' we have a skipped region
-        elif c == 'N':
-            # If there's a skipped region we have a junction, using the position it is defined as string START:END 
-            # and added to the list of junctions
-            junction = f'{pos}:{pos + int(cigar_section)}'
+    # get all sections of the cigar string that are a series of digits followed by either M or N
+    regex = '(\d+)([M,N])'
+    sections = re.finditer(regex, cigar)
+    
+    # Iterate over the sections
+    for section in sections:
+        # for a match in the cigar string we adjust the position along
+        if section.group(2) == 'M':
+            pos += int(section.group(1))
+        # for a skip we add the junction to the junction list and adjust the position along 
+        elif section.group(2) == 'N':
+            junction = (pos,pos + int(section.group(1)))
             junction_list.append(junction)
-            cigar_section = ''
-        # If there's an 'S', 'I' or anything else it is ignored along with the preceding digits
-        else:
-            cigar_section = ''
-        
-        print(junction_list)
+            pos += int(section.group(1))
+    
+    return junction_list
 
 
 
@@ -71,8 +64,8 @@ def create_junctions_dict(read_list):
 
 if __name__ == '__main__':
     read_list =  parse_sam(TEST_SAM)
-    #for i in range(25):
-    #    print(read_list[i])
+    for i in range(5):
+        print(read_list[i])
 
     get_junctions(TEST_CIGAR, 0)
                 
