@@ -33,7 +33,7 @@ def parse_sam(filepath):
 
 # returns the junctions form cigar string and position
 def get_junctions(cigar, pos):
-    junction_list = []
+    junctions = []
 
     # get all sections of the cigar string that are a series of digits followed by either M or N
     regex = '(\d+)([M,N])'
@@ -47,18 +47,25 @@ def get_junctions(cigar, pos):
         # for a skip we add the junction to the junction list and adjust the position along 
         elif section.group(2) == 'N':
             junction = (pos,pos + int(section.group(1)))
-            junction_list.append(junction)
+            junctions.append(junction)
             pos += int(section.group(1))
     
-    return junction_list
+    return junctions
 
 
 
 # Returns a dictionary; every key is a junction and the values are the number of reads matching the associated junction
 def create_junctions_dict(read_list):
-    junction_dict = {}
+    chromosome_junction_dict = {}
 
     for read in read_list:
+        if read['NH:i:x'] == 1:
+            if 'N' in read['CIGAR']:
+                read_junctions = get_junctions(read['CIGAR'],read['POS'])
+                if read['RNAME'] not in chromosome_junction_dict:
+                    chromosome_junction_dict[read['RNAME']] = {}
+                for junction in read_junctions:
+
         pass
 
 
