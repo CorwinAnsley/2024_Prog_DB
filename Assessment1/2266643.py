@@ -78,8 +78,8 @@ def create_junctions_dict(read_list):
                 
                 # Add each junction to the dictionary 
                 for junction in read_junctions:
-                    if junction[0] in chromosome_junction_dict.keys():
-                        # If the junction is already in the dictionary simply increase the number of supporting reads
+                    if junction[0] in chromosome_junction_dict[read['RNAME']].keys():
+                        # If the junction is already in the chromosome dictionary simply increase the number of supporting reads for that junction
                         chromosome_junction_dict[read['RNAME']][junction[0]]['number_supporting_reads'] += 1
                     else:
                         # If the junction is not yet in the dictionary create a new dict with the key of the start position
