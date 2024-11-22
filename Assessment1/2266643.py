@@ -34,6 +34,8 @@ def parse_sam(filepath):
 # returns the junctions form cigar string and position
 def get_junctions(cigar, pos):
     junctions = []
+    # Make sure pos in an int
+    pos = int(pos)
 
     # get all sections of the cigar string that are a series of digits followed by either M or N
     regex = '(\d+)([M,N])'
@@ -54,25 +56,50 @@ def get_junctions(cigar, pos):
 
 
 
-# Returns a dictionary; every key is a junction and the values are the number of reads matching the associated junction
+# Returns a dictionary; each key is a chromosome the values are dictionaries for 
+# all the junctions in that chromosome, identified by the start position.
+# Each junction is also dictionary containing the number of supporting reads and the end position
+# This is a little convuluted but will make later steps more efficient
 def create_junctions_dict(read_list):
+    # Creating an empty dictionary where the junctions will be saved
     chromosome_junction_dict = {}
 
+    # Iterate over all reads
     for read in read_list:
+        # Check the read only aligns once
         if read['NH:i:x'] == 1:
+            # Check if the read has a split
             if 'N' in read['CIGAR']:
+                # Get all the junctions from the read cigar string
                 read_junctions = get_junctions(read['CIGAR'],read['POS'])
+                # If the chromosome this read is from is not in the dict, add it
                 if read['RNAME'] not in chromosome_junction_dict:
                     chromosome_junction_dict[read['RNAME']] = {}
+                
+                # Add each junction to the dictionary 
                 for junction in read_junctions:
+                    if junction[0] in chromosome_junction_dict.keys():
+                        # If the junction is already in the dictionary simply increase the number of supporting reads
+                        chromosome_junction_dict[read['RNAME']][junction[0]]['number_supporting_reads'] += 1
+                    else:
+                        # If the junction is not yet in the dictionary create a new dict with the key of the start position
+                        chromosome_junction_dict[read['RNAME']][junction[0]] = {}
+                        # Add the number of supporting reads (1 for now) and the end position
+                        chromosome_junction_dict[read['RNAME']][junction[0]]['number_supporting_reads'] = 1
+                        chromosome_junction_dict[read['RNAME']][junction[0]]['end_pos'] = junction[1]
+    return chromosome_junction_dict
 
-        pass
 
 
 if __name__ == '__main__':
     read_list =  parse_sam(TEST_SAM)
-    for i in range(5):
-        print(read_list[i])
 
-    get_junctions(TEST_CIGAR, 0)
+    chromosome_junction_dict = create_junctions_dict(read_list)
+    #print(chromosome_junction_dict.keys())
+    #example_chr = next(chromosome_junction_dict.keys())
+    print(chromosome_junction_dict)
+    #  for i in range(5):
+    #      print(read_list[i])
+
+    #get_junctions(TEST_CIGAR, 0)
                 
