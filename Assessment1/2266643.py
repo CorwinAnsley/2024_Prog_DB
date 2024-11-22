@@ -8,6 +8,8 @@ import re
 TEST_SAM = 'Toxo_chr8_subset.sam'
 TEST_CIGAR = '1S10M7887N89M10N'
 
+TEST_GENE_FILE = 'GenesByLocation_Summary.txt'
+
 #  Dict of which colum in the sam file the relevant data is stored
 SAM_COLUMNS = {'RNAME':2, 'POS':3, 'CIGAR':5, 'NH:i:x':-1}
 
@@ -31,7 +33,7 @@ def parse_sam(filepath):
                 read_list.append(read_dict)
         return read_list
 
-# returns the junctions form cigar string and position
+# returns the junctions from cigar string and position
 def get_junctions(cigar, pos):
     junctions = []
     # Make sure pos in an int
@@ -59,8 +61,8 @@ def get_junctions(cigar, pos):
 # Returns a dictionary; each key is a chromosome the values are dictionaries for 
 # all the junctions in that chromosome, identified by the start position.
 # Each junction is also dictionary containing the number of supporting reads and the end position
-# This is a little convuluted but will make later steps more efficient
-def create_junctions_dict(read_list):
+# This is a little convoluted but will make later steps more efficient as we only need to search junctions on the right chromosome
+def create_chromosome_junctions_dict(read_list):
     # Creating an empty dictionary where the junctions will be saved
     chromosome_junction_dict = {}
 
@@ -89,17 +91,42 @@ def create_junctions_dict(read_list):
                         chromosome_junction_dict[read['RNAME']][junction[0]]['end_pos'] = junction[1]
     return chromosome_junction_dict
 
+def create_gene_dict_from_file(filepath):
+    with open(filepath) as csv_file:
+        gene_reader = csv.reader(csv_file,delimiter='\t')
+        chromosome_gene_dict = {}
+        for gene in gene_reader:
+            gene_location = gene[2]
+            chromosome = gene_location.split(':')[0]
+            if chromosome not in chromosome_gene_dict.keys():
+                chromosome_gene_dict[chromosome] = {}
+            
+            #If the same gene is repeated multiple times we will only use the first instance
+            if gene[0] not in chromosome_gene_dict[chromosome]:
+                chromosome_gene_dict[chromosome][gene[0]] = {}
+                position = gene_location.split(':')[1].split('..')
+                start_pos = position[0].replace(',','')
+                end_pos = position[1]
+                #chromosome_gene_dict[chromosome][gene[0]]['start_pos'] = start_pos
+                #chromosome_gene_dict[chromosome][gene[0]]['end_pos'] = end_pos
+
+    return chromosome_gene_dict
+# # Output a 
+# def create_gene_junctions_list():
 
 
 if __name__ == '__main__':
     read_list =  parse_sam(TEST_SAM)
 
-    chromosome_junction_dict = create_junctions_dict(read_list)
+    chromosome_junction_dict = create_chromosome_junctions_dict(read_list)
     #print(chromosome_junction_dict.keys())
     #example_chr = next(chromosome_junction_dict.keys())
-    print(chromosome_junction_dict)
+    #print(chromosome_junction_dict)
     #  for i in range(5):
     #      print(read_list[i])
 
     #get_junctions(TEST_CIGAR, 0)
+
+    genes = create_gene_dict_from_file(TEST_GENE_FILE)
+    print(genes)
                 
