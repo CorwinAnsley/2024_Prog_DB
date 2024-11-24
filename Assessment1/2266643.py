@@ -104,11 +104,11 @@ def create_gene_dict_from_file(filepath):
             #If the same gene is repeated multiple times we will only use the first instance
             if gene[0] not in chromosome_gene_dict[chromosome]:
                 chromosome_gene_dict[chromosome][gene[0]] = {}
-                position = gene_location.split(':')[1].split('..')
+                position = gene_location.split(':')[1].split('..')[:-3]
                 start_pos = position[0].replace(',','')
-                end_pos = position[1]
-                #chromosome_gene_dict[chromosome][gene[0]]['start_pos'] = start_pos
-                #chromosome_gene_dict[chromosome][gene[0]]['end_pos'] = end_pos
+                end_pos = position[1].replace(',','')[:-3]
+                chromosome_gene_dict[chromosome][gene[0]]['start_pos'] = start_pos
+                chromosome_gene_dict[chromosome][gene[0]]['end_pos'] = end_pos
 
     return chromosome_gene_dict
 # # Output a 
