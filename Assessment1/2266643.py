@@ -91,28 +91,61 @@ def create_chromosome_junctions_dict(read_list):
                         chromosome_junction_dict[read['RNAME']][junction[0]]['end_pos'] = junction[1]
     return chromosome_junction_dict
 
-def create_gene_dict_from_file(filepath):
+# Returns a dict of each chromosome with each gene for the respective chromosome and its location
+def create_gene_dict_from_file(filepath, headers = True):
     with open(filepath) as csv_file:
         gene_reader = csv.reader(csv_file,delimiter='\t')
+        # remove headers, if the file has them
+        if headers:
+            headers = next(gene_reader)
+
+        # Create the empty dict that will be populated
         chromosome_gene_dict = {}
+
+        # Iterate over the rows in the file, i.e. the genes
         for gene in gene_reader:
+            # Make sure the gene row has the right number of columns
+            try:
+                assert len(gene) == 3
+            except:
+                continue
+
+            # The location is in the 3rd column
             gene_location = gene[2]
+            # The chromosome and the (start and end) position are split by a ':', here we take just the chromosome
             chromosome = gene_location.split(':')[0]
+
+            # If the chromosome does not exist as a key in our dict we create an empty dict corresponding to it
             if chromosome not in chromosome_gene_dict.keys():
                 chromosome_gene_dict[chromosome] = {}
             
-            #If the same gene is repeated multiple times we will only use the first instance
+            # If the same gene is repeated multiple times we will only use the first instance
             if gene[0] not in chromosome_gene_dict[chromosome]:
+                # Add the gene as an empty dict into dict for the corresponding chromosome
                 chromosome_gene_dict[chromosome][gene[0]] = {}
-                position = gene_location.split(':')[1].split('..')[:-3]
-                start_pos = position[0].replace(',','')
-                end_pos = position[1].replace(',','')[:-3]
+                try:
+                    # Split the position from the chromosome and split that into the start and the end positions
+                    position = gene_location.split(':')[1]
+                    position = position.split('..')
+
+                    # Assign the start and end positions to variables, removing extraneous characters and converting to int
+                 
+                    start_pos = int(position[0].replace(',',''))
+                    end_pos = position[1].replace(',','')
+                    end_pos = int(end_pos[:-3]) # Removing the end character which specify which strand, e.g. (+)
+                except:
+                    # An error occured turning the positions to ints, removing the gene and moving on to the next one
+                    chromosome_gene_dict[chromosome].pop(gene[0], None)
+                    continue
+
+                # Add the start and end positions to the dict for the gene
                 chromosome_gene_dict[chromosome][gene[0]]['start_pos'] = start_pos
                 chromosome_gene_dict[chromosome][gene[0]]['end_pos'] = end_pos
 
     return chromosome_gene_dict
-# # Output a 
-# def create_gene_junctions_list():
+
+#def output
+
 
 
 if __name__ == '__main__':
