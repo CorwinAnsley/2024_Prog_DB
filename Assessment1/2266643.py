@@ -1,6 +1,7 @@
 import csv
 import argparse
 import re
+import bisect
 
 ### Apologies for the excessive and overly verbose comments, wanted to being absolutely sure that 
 ### there was not too few
@@ -144,33 +145,50 @@ def create_gene_dict_from_file(filepath, headers = True):
 
     return chromosome_gene_dict
 
+# Using the sorted list of junction start positions and dict of junctions, return all junctions that fall within the start and end of a gene
 def get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end):
-    for junction_start in junction_start_list:
-        if junction_start < gene_start:
-            junction_start_list.pop(junction_start)
-        else:
-            break
-    
-    for junction_start in reversed(junction_start_list):
-        if junction_start > gene_end:
-            junction_start_list.pop(junction_start)
-        else:
-            break
-    
-    for junction_start in junction_start_list:
-        if junction_dict[junction_start]['end_pos'] > gene_end:
-            junction_start_list.pop(junction_start)
-            
 
-    for junction_start in junction_start_list:
-        if chromosome_junction_dict[junction_start]['end_pos']
+#     # Make sure gene start is less than the gene end
+#     assert gene_start < gene_end
+
+#     indexes_to_remove = []
+
+#     # filter out all junctions where the start position is less than the start position of the gene (the list is in ascending order so we don't need to check every entry)
+#     for index, junction_start in enumerate(junction_start_list):
+#         if junction_start < gene_start:
+#             indexes_to_remove.append(index)
+#         else:
+#             break
+
+#    # filter out junctions where the start position is greater than end position of the gene (Checked in descending order, again not every entry needs to be checked)
+#     for index, junction_start in enumerate(reversed(junction_start_list)):
+#         if junction_start > gene_end:
+#             indexes_to_remove.append(index)
+#         else:
+#             break
+    
+#     # Check every junction remaining to make sure the end position is not greater than the end position of the gene
+#     for junction_start in junction_start_list:
+#         if junction_dict[junction_start]['end_pos'] > gene_end:
+#             junction_start_list.pop(junction_start_list.index(junction_start))
+    lower_bound_junctions = bisect.bisect_left(junction_start_list, gene_start)
+    upper_bound_junctions = bisect.bisect_right(junction_start_list, gene_end, lo=lower_bound_junctions)
+            
+    
+    return junction_start_list
 
 def output_gene_junctions(output_path, chromosome_gene_dict, chromosome_junction_dict):
     for chromosome in chromosome_gene_dict:
-        junctions_start_list = list(chromosome_junction_dict[chromosome].keys())
-        junctions_start_list.sort()
+        junction_dict = chromosome_junction_dict[chromosome]
+        junction_start_list = list(junction_dict.keys())
+        junction_start_list.sort()
 
         for gene in chromosome_gene_dict[chromosome]:
+            gene_start = chromosome_gene_dict[chromosome][gene]['start_pos']
+            gene_end = chromosome_gene_dict[chromosome][gene]['end_pos']
+            gene_junctions = get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end)
+            print(gene_junctions)
+            break
 
 
 
