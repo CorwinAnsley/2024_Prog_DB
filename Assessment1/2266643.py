@@ -144,7 +144,34 @@ def create_gene_dict_from_file(filepath, headers = True):
 
     return chromosome_gene_dict
 
-#def output
+def get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end):
+    for junction_start in junction_start_list:
+        if junction_start < gene_start:
+            junction_start_list.pop(junction_start)
+        else:
+            break
+    
+    for junction_start in reversed(junction_start_list):
+        if junction_start > gene_end:
+            junction_start_list.pop(junction_start)
+        else:
+            break
+    
+    for junction_start in junction_start_list:
+        if junction_dict[junction_start]['end_pos'] > gene_end:
+            junction_start_list.pop(junction_start)
+            
+
+    for junction_start in junction_start_list:
+        if chromosome_junction_dict[junction_start]['end_pos']
+
+def output_gene_junctions(output_path, chromosome_gene_dict, chromosome_junction_dict):
+    for chromosome in chromosome_gene_dict:
+        junctions_start_list = list(chromosome_junction_dict[chromosome].keys())
+        junctions_start_list.sort()
+
+        for gene in chromosome_gene_dict[chromosome]:
+
 
 
 
@@ -160,6 +187,8 @@ if __name__ == '__main__':
 
     #get_junctions(TEST_CIGAR, 0)
 
-    genes = create_gene_dict_from_file(TEST_GENE_FILE)
-    print(genes)
+    chromosome_gene_dict = create_gene_dict_from_file(TEST_GENE_FILE)
+
+    output_gene_junctions('', chromosome_gene_dict, chromosome_junction_dict)
+    #print(genes)
                 
