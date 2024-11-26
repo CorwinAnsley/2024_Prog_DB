@@ -46,9 +46,14 @@ def get_junctions(cigar, pos):
     # Make sure pos in an int
     pos = int(pos)
 
+    # Make sure cigar only contains the right characters
+    test_regex = '[^\.A-Z0-9]'
+    assert not re.search(test_regex, cigar)
+
     # get all sections of the cigar string that are a series of digits followed by either M or N
-    regex = '(\d+)([M,N])'
-    sections = re.finditer(regex, cigar)
+    cigar_regex = '(\d+)([M,N])'
+    sections = re.finditer(cigar_regex, cigar)
+
     
     # Iterate over the sections
     for section in sections:
@@ -75,32 +80,35 @@ def create_chromosome_junctions_dict(read_list):
 
     # Iterate over all reads
     for read in read_list:
-        # Check the read only aligns once
-        if read['NH:i:x'] == 1:
-            # Check if the read has a split
-            if 'N' in read['CIGAR']:
-                # Get all the junctions from the read cigar string
-                read_junctions = get_junctions(read['CIGAR'],read['POS'])
-                # If the chromosome this read is from is not in the dict, add it
-                if read['RNAME'] not in chromosome_junction_dict:
-                    chromosome_junction_dict[read['RNAME']] = {}
-                
-                # Add each junction to the dictionary 
-                for junction in read_junctions:
-                    # Check if start position is in the dict, if it has check the end position
-                    if junction[0] in chromosome_junction_dict[read['RNAME']].keys():
-                        # If the junction is already in the chromosome dictionary simply increase the number of supporting reads for that junction
-                        if junction[1] in chromosome_junction_dict[read['RNAME']][junction[0]]:
-                            chromosome_junction_dict[read['RNAME']][junction[0]][junction[1]] += 1
-                        # If the junction is not yet in the dictionary create a new dict with the key of the start position
-                        else:
-                            chromosome_junction_dict[read['RNAME']][junction[0]][junction[1]] = 1            
+        try:
+            # Check the read only aligns once
+            if read['NH:i:x'] == 1:
+                # Check if the read has a split
+                if 'N' in read['CIGAR']:
+                    # Get all the junctions from the read cigar string
+                    read_junctions = get_junctions(read['CIGAR'],read['POS'])
+                    # If the chromosome this read is from is not in the dict, add it
+                    if read['RNAME'] not in chromosome_junction_dict:
+                        chromosome_junction_dict[read['RNAME']] = {}
+                    
+                    # Add each junction to the dictionary 
+                    for junction in read_junctions:
+                        # Check if start position is in the dict, if it has check the end position
+                        if junction[0] in chromosome_junction_dict[read['RNAME']].keys():
+                            # If the junction is already in the chromosome dictionary simply increase the number of supporting reads for that junction
+                            if junction[1] in chromosome_junction_dict[read['RNAME']][junction[0]]:
+                                chromosome_junction_dict[read['RNAME']][junction[0]][junction[1]] += 1
+                            # If the junction is not yet in the dictionary create a new dict with the key of the start position
+                            else:
+                                chromosome_junction_dict[read['RNAME']][junction[0]][junction[1]] = 1            
 
-                    else:
-                        # If the start position is not yet in the dictionary create a new dict with the key of the start position
-                        chromosome_junction_dict[read['RNAME']][junction[0]] = {}
-                        # Add the number of supporting reads (1 for now) as  value with the end position as the key
-                        chromosome_junction_dict[read['RNAME']][junction[0]][junction[1]] = 1
+                        else:
+                            # If the start position is not yet in the dictionary create a new dict with the key of the start position
+                            chromosome_junction_dict[read['RNAME']][junction[0]] = {}
+                            # Add the number of supporting reads (1 for now) as  value with the end position as the key
+                            chromosome_junction_dict[read['RNAME']][junction[0]][junction[1]] = 1
+        except:
+            continue
     return chromosome_junction_dict
 
 # Returns a dict of each chromosome with each gene for the respective chromosome and its location
@@ -163,8 +171,10 @@ def get_junctions_within_gene(junction_start_list, junction_dict, gene_start, ge
     lower_bound_junctions = bisect.bisect_left(junction_start_list, gene_start)
     upper_bound_junctions = bisect.bisect_right(junction_start_list, gene_end, lo=lower_bound_junctions)
 
+    # Create a list of all matching junction start positions using the upper and lower bounds 
     matching_junction_start_position = junction_start_list[lower_bound_junctions:upper_bound_junctions]
 
+    # Create an empty dict to return that will be populated with junctions
     gene_junctions = {}
 
     # Check every junction with these start positions to make sure the end position is not greater than the end position of the gene
@@ -177,22 +187,32 @@ def get_junctions_within_gene(junction_start_list, junction_dict, gene_start, ge
     
     return gene_junctions
 
+# Finds the junctions for each gene and outputs them to tab seperated .txt file
 def output_gene_junctions(output_path, chromosome_gene_dict, chromosome_junction_dict):
     with open(output_path, 'w') as output_file:
+        # Iterate over each chromosome in the gene dict
         for chromosome in chromosome_gene_dict:
+            # Get the junctions that are in this chromosome
             junction_dict = chromosome_junction_dict[chromosome]
+            # Get the junction start positions and sort them, this will be important later
             junction_start_list = list(junction_dict.keys())
             junction_start_list.sort()
 
+            # Iterate over gene in this chromosome
             for gene in chromosome_gene_dict[chromosome]:
+                # Get the genes start and end positions
                 gene_start = chromosome_gene_dict[chromosome][gene]['start_pos']
                 gene_end = chromosome_gene_dict[chromosome][gene]['end_pos']
+                # Get the junctions that fall within this gene
                 gene_junctions = get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end)
 
+                # Iterate over the junctions we found
                 for junction in gene_junctions:
+                    # Write each junction as a line in the file with gene id, start and end positions, and the number of supporting reads seperated by tabs
                     junction_row = f'{gene}\t{junction[0]}\t{junction[1]}\t{gene_junctions[junction]}\n'
                     output_file.write(junction_row)
 
+                # If any junctions were written to the file, write a blank line before moving on to the next gene
                 if len(gene_junctions) > 0:
                     output_file.write('\n')
 
