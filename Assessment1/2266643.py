@@ -1,5 +1,5 @@
 import csv
-import argparse
+import sys
 import re
 import bisect
 
@@ -30,14 +30,17 @@ def parse_sam(filepath):
             if row[0].startswith('@'):
                 pass
             else:
-                # Obtain the relevant data and store in dictionary
-                read_dict = {}
-                for column in SAM_COLUMNS:
-                    read_dict[column] = row[SAM_COLUMNS[column]]
-                read_dict['NH:i:x'] = int(read_dict['NH:i:x'].split(':')[-1]) #Only the integer at the end of NH:i:x is needed (i.e. x)
+                try:
+                    # Obtain the relevant data and store in dictionary
+                    read_dict = {}
+                    for column in SAM_COLUMNS:
+                        read_dict[column] = row[SAM_COLUMNS[column]]
+                    read_dict['NH:i:x'] = int(read_dict['NH:i:x'].split(':')[-1]) #Only the integer at the end of NH:i:x is needed (i.e. x)
 
-                # Append the dict with read data to the read list
-                read_list.append(read_dict)
+                    # Append the dict with read data to the read list
+                    read_list.append(read_dict)
+                except:
+                    continue
         return read_list
 
 # returns the junctions from cigar string and position
@@ -166,6 +169,9 @@ def create_gene_dict_from_file(filepath, headers = True):
 
 # Using the sorted list of junction start positions and dict of junctions, return all junctions that fall within the start and end of a gene
 def get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end):
+
+    # Make sure gene start and end positions make sense
+    assert gene_start < gene_end
     
     # The junction start position list is sorted so we can use binary searches to find junction starts that fall between the start and end gene positions
     lower_bound_junctions = bisect.bisect_left(junction_start_list, gene_start)
@@ -200,21 +206,24 @@ def output_gene_junctions(output_path, chromosome_gene_dict, chromosome_junction
 
             # Iterate over gene in this chromosome
             for gene in chromosome_gene_dict[chromosome]:
-                # Get the genes start and end positions
-                gene_start = chromosome_gene_dict[chromosome][gene]['start_pos']
-                gene_end = chromosome_gene_dict[chromosome][gene]['end_pos']
-                # Get the junctions that fall within this gene
-                gene_junctions = get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end)
+                try:
+                    # Get the genes start and end positions
+                    gene_start = chromosome_gene_dict[chromosome][gene]['start_pos']
+                    gene_end = chromosome_gene_dict[chromosome][gene]['end_pos']
+                    # Get the junctions that fall within this gene
+                    gene_junctions = get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end)
 
-                # Iterate over the junctions we found
-                for junction in gene_junctions:
-                    # Write each junction as a line in the file with gene id, start and end positions, and the number of supporting reads seperated by tabs
-                    junction_row = f'{gene}\t{junction[0]}\t{junction[1]}\t{gene_junctions[junction]}\n'
-                    output_file.write(junction_row)
+                    # Iterate over the junctions we found
+                    for junction in gene_junctions:
+                        # Write each junction as a line in the file with gene id, start and end positions, and the number of supporting reads seperated by tabs
+                        junction_row = f'{gene}\t{junction[0]}\t{junction[1]}\t{gene_junctions[junction]}\n'
+                        output_file.write(junction_row)
 
-                # If any junctions were written to the file, write a blank line before moving on to the next gene
-                if len(gene_junctions) > 0:
-                    output_file.write('\n')
+                    # If any junctions were written to the file, write a blank line before moving on to the next gene
+                    if len(gene_junctions) > 0:
+                        output_file.write('\n')
+                except:
+                    continue
 
 
 ### TESTING FUNCTIONS ###
@@ -260,23 +269,8 @@ def test_output_gene_junctions():
     with open('test.txt', 'r') as test_output_file:
         assert test_output_file.readline() == 'TEST_GENE\t10\t30\t1\n'
 
-if __name__ == '__main__':
-    read_list =  parse_sam(TEST_SAM)
-
-    chromosome_junction_dict = create_chromosome_junctions_dict(read_list)
-    #print(chromosome_junction_dict.keys())
-    #example_chr = next(chromosome_junction_dict.keys())
-    #print(chromosome_junction_dict)
-    #  for i in range(5):
-    #      print(read_list[i])
-
-    #get_junctions(TEST_CIGAR, 0)
-
-    chromosome_gene_dict = create_gene_dict_from_file(TEST_GENE_FILE)
-
-    output_gene_junctions(OUTPUT_FILE, chromosome_gene_dict, chromosome_junction_dict)
-    #print(genes)
-    
+# Wrapper function to run all tests
+def test_functions():
     test_parse_sam()
 
     test_get_junctions()
@@ -288,3 +282,24 @@ if __name__ == '__main__':
     test_get_junctions_within_gene()
 
     test_output_gene_junctions()
+
+if __name__ == '__main__':
+    # Uncomment to run tests (tests require some files to work properly)
+    #test_functions()
+
+    # Get sam and gene filepaths from command line
+    sam_filepath = sys.argv[1]
+    gene_filepath = sys.argv[2]
+
+    # Get list of reads
+    read_list =  parse_sam(sam_filepath)
+
+    # Get dict with junctions, by chromosome
+    chromosome_junction_dict = create_chromosome_junctions_dict(read_list)
+
+    # Get dict with genes, by chromosome
+    chromosome_gene_dict = create_gene_dict_from_file(gene_filepath)
+
+    # Get the junctions for each gene and output them
+    output_gene_junctions(OUTPUT_FILE, chromosome_gene_dict, chromosome_junction_dict)
+    
