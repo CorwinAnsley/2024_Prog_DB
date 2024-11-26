@@ -60,11 +60,10 @@ def get_junctions(cigar, pos):
     return junctions
 
 
-
 # Returns a dictionary; each key is a chromosome the values are dictionaries for 
-# all the junctions in that chromosome, identified by the start position.
+# all the junction start positions in that chromosome, identified by the start position.
 # Each junction start position is also dictionary containing the end positions as keys with the number of supporting reads as the corresponding value
-# so multiple junctions with the same start position can be saved 
+# so multiple junctions with the same start position can be stored. 
 # This is a little convoluted but will make later steps more efficient as we only need to search junctions on the right chromosome
 def create_chromosome_junctions_dict(read_list):
     # Creating an empty dictionary where the junctions will be saved
@@ -113,7 +112,7 @@ def create_gene_dict_from_file(filepath, headers = True):
 
         # Iterate over the rows in the file, i.e. the genes
         for gene in gene_reader:
-            # Make sure the gene row has the right number of columns
+            # Make sure the gene row has the right number of columns, if not we skip it
             try:
                 assert len(gene) == 3
             except:
@@ -195,7 +194,21 @@ def output_gene_junctions(output_path, chromosome_gene_dict, chromosome_junction
                 if len(gene_junctions) > 0:
                     output_file.write('\n')
 
+### TESTING FUNCTIONS ###
 
+# Testing function for parse_same
+def test_parse_sam():
+    read_list = parse_sam(TEST_SAM)
+    assert read_list[0] == {'RNAME': 'TGME49_chrVIII', 'POS': '6625858', 'CIGAR': '1S10M7887N89M', 'NH:i:x': 1}
+
+    for read in read_list:
+        for column in SAM_COLUMNS:
+            assert column in read
+
+# Testing function for get_junctions
+def test_get_junctions():
+    junctions = get_junctions(TEST_CIGAR, 0)
+    assert junctions == [(10, 7897), (7986, 7996)]
 
 
 
@@ -215,4 +228,7 @@ if __name__ == '__main__':
 
     output_gene_junctions(OUTPUT_FILE, chromosome_gene_dict, chromosome_junction_dict)
     #print(genes)
-                
+    
+    test_parse_sam()
+
+    test_get_junctions()
