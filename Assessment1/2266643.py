@@ -3,18 +3,22 @@ import argparse
 import re
 import bisect
 
-### Apologies for the excessive and overly verbose comments, wanted to being absolutely sure that 
-### there was not too few
-
-TEST_SAM = 'Toxo_chr8_subset.sam'
-TEST_CIGAR = '1S10M7887N89M10N'
-
-TEST_GENE_FILE = 'GenesByLocation_Summary.txt'
-
 #  Dict of which colum in the sam file the relevant data is stored
 SAM_COLUMNS = {'RNAME':2, 'POS':3, 'CIGAR':5, 'NH:i:x':-1}
 
+# Hardcoded output filename
 OUTPUT_FILE = '2266643.txt'
+
+## Constants and filenames for testing functions ###
+TEST_SAM = 'Toxo_chr8_subset.sam'
+TEST_CIGAR = '1S10M7887N89M10N'
+TEST_GENE_FILE = 'GenesByLocation_Summary.txt'
+TEST_READ_LIST = [{'RNAME': 'TGME49_chrVIII', 'POS': '0', 'CIGAR': '1S10M20N10M20N', 'NH:i:x': 1},
+                  {'RNAME': 'TGME49_chrVIII', 'POS': '0', 'CIGAR': '1S11M20N10M20N', 'NH:i:x': 2},
+                  {'RNAME': 'TGME49_chrVIII', 'POS': '0', 'CIGAR': '1S10M21N10M20N', 'NH:i:x': 1},
+                  ]
+TEST_CHROMOSOME_JUNCTION_DICT =  {'TGME49_chrVIII': {10: {30: 1, 31: 1}, 40: {60: 1}, 41: {61: 1}}}
+TEST_CHROMOSOME_GENE_DICT = {'TGME49_chrVIII':{'TEST_GENE':{'start_pos': 10, 'end_pos': 60}}}
 
 # Parses sam file to extract the relevant read data and return it as a list of dictionaries
 def parse_sam(filepath):
@@ -166,10 +170,10 @@ def get_junctions_within_gene(junction_start_list, junction_dict, gene_start, ge
     # Check every junction with these start positions to make sure the end position is not greater than the end position of the gene
     for junction_start in matching_junction_start_position:
         for end_pos in junction_dict[junction_start]:
-            if end_pos < gene_end:
+            if end_pos <= gene_end:
+                # Add the junction to the gene_junctions dict with the key as a tuple of the start and end positions and the value of the number of supporting reads
                 junction = (junction_start, end_pos)
-                gene_junctions[junction] = junction_dict[junction_start][end_pos]
-            
+                gene_junctions[junction] = junction_dict[junction_start][end_pos]            
     
     return gene_junctions
 
@@ -184,15 +188,14 @@ def output_gene_junctions(output_path, chromosome_gene_dict, chromosome_junction
                 gene_start = chromosome_gene_dict[chromosome][gene]['start_pos']
                 gene_end = chromosome_gene_dict[chromosome][gene]['end_pos']
                 gene_junctions = get_junctions_within_gene(junction_start_list, junction_dict, gene_start, gene_end)
-                # print(gene_start)
-                # print(gene_end)
-                # print(gene_junctions)
+
                 for junction in gene_junctions:
                     junction_row = f'{gene}\t{junction[0]}\t{junction[1]}\t{gene_junctions[junction]}\n'
                     output_file.write(junction_row)
 
                 if len(gene_junctions) > 0:
                     output_file.write('\n')
+
 
 ### TESTING FUNCTIONS ###
 
@@ -210,7 +213,32 @@ def test_get_junctions():
     junctions = get_junctions(TEST_CIGAR, 0)
     assert junctions == [(10, 7897), (7986, 7996)]
 
+# Testing function for create_chromosome_junctions_dict
+def test_create_chromosome_junctions_dict():
+    chromosome_junction_dict = create_chromosome_junctions_dict(TEST_READ_LIST)
+    assert chromosome_junction_dict == {'TGME49_chrVIII': {10: {30: 1, 31: 1}, 40: {60: 1}, 41: {61: 1}}}
 
+# Testing function for create_gene_dict_from_file
+def test_create_gene_dict_from_file():
+    chromosome_gene_dict = create_gene_dict_from_file(TEST_GENE_FILE)
+    assert chromosome_gene_dict['TGME49_chrVIII']['TGME49_268220'] == {'start_pos': 6631349, 'end_pos': 6636865}
+
+# Testing function for get_junctions_within_gene
+def test_get_junctions_within_gene():
+    junction_dict = TEST_CHROMOSOME_JUNCTION_DICT['TGME49_chrVIII']
+    junction_start_list = list(junction_dict.keys())
+    junction_start_list.sort()
+
+    gene_junctions = get_junctions_within_gene(junction_start_list, junction_dict, 10, 60)
+
+    assert gene_junctions == {(10, 30): 1, (10, 31): 1, (40, 60): 1}
+
+# Testing function for test_output_gene_junctions
+def test_output_gene_junctions():
+    output_gene_junctions('test.txt', TEST_CHROMOSOME_GENE_DICT, TEST_CHROMOSOME_JUNCTION_DICT)
+
+    with open('test.txt', 'r') as test_output_file:
+        assert test_output_file.readline() == 'TEST_GENE\t10\t30\t1\n'
 
 if __name__ == '__main__':
     read_list =  parse_sam(TEST_SAM)
@@ -232,3 +260,11 @@ if __name__ == '__main__':
     test_parse_sam()
 
     test_get_junctions()
+
+    test_create_chromosome_junctions_dict()
+
+    test_create_gene_dict_from_file()
+
+    test_get_junctions_within_gene()
+
+    test_output_gene_junctions()
