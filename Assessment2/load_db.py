@@ -1,6 +1,8 @@
 import sqlite3
 import csv
 
+import consts
+
 def check_subject_entry(values):
     try:
         # Make sure there is an SubjectID
@@ -35,10 +37,35 @@ def check_subject_entry(values):
     except:
         raise Exception('Invalid entry')
 
-def load_subjects(db_filepath, subjects_filepath):
-    # create db connection
-    db_connection = sqlite3.connect(db_filepath)
-    db_cur = db_connection.cursor()
+def create_header_dict(headers, headers_order):
+    header_dict = {}
+    for i in range(len(headers)):
+        for j in range(len(headers_order)):
+            if headers[i] == headers_order[j]:
+                header_dict[i] = j
 
+def load_file_data(subjects_filepath, delimeter=',', headers_order = None):
     with open(subjects_filepath) as subject_file:
-        spamreader = csv.reader(csvfile, delimiter=' ', quotechar='|')
+        reader = csv.reader(subject_file, delimiter=delimeter)
+        headers = next(reader)
+        if headers_order:
+            header_dict = create_header_dict(headers, consts.SUBJECT_HEADERS_ORDER)
+        
+        file_data = []
+        for row in reader:
+            if headers_order:
+                row_data = []
+                for i in range(len(row)):
+                    row_data[header_dict[i]] = row[i]
+                file_data.append(row_data)
+            else:
+                file_data.append(row)
+    
+    return file_data
+    
+                
+    # # create db connection
+    # db_connection = sqlite3.connect(db_filepath)
+    # db_cur = db_connection.cursor()
+
+
