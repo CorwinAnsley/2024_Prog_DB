@@ -2,8 +2,8 @@
 
  CREATE TABLE Subject(
   SubjectID VARCHAR(255) NOT NULL,
-  Sex CHAR(1), -- 'M' or 'F'
   Race CHAR(1),
+  Sex CHAR(1), -- 'M' or 'F'
   Age DECIMAL (5,2),
   BMI DECIMAL (5,2),
   SSPG DECIMAL (6,2),
