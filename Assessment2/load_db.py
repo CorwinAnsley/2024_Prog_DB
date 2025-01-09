@@ -3,43 +3,82 @@ import csv
 
 import consts
 
-def check_subject_entry(values):
+def check_subject_entry(values, header_dict):
     try:
         #Ensure right amount of values
         assert len(values) == 7
 
+        r_values = [None]*7
         # Make sure there is an SubjectID
-        values[0] = str(values[0])
-        assert len(values[0]) > 0
+        r_values[0] = str(values[header_dict[0]])
+        assert len(r_values[0]) > 0
 
         # Error check race value
-        values[1] = str(values[1])
+        r_values[1] = str(values[header_dict[1]])
         try:
-            assert len(values[1]) == 1
+            assert len(r_values[1]) == 1
         except:
-            values[1] = None
+            r_values[1] = None
 
         # Error check sex value
-        values[2] = str(values[2])
+        r_values[2] = str(values[header_dict[2]])
         try:
-            assert values[2] in ['M', 'F']
+            assert r_values[2] in ['M', 'F']
         except:
-            values[2] = None
+            r_values[2] = None
         
         # Error check Age, BMI, SSPG
         for i in range(3,6):
-            values[i] = float(values[i])
+            r_values[i] = float(values[header_dict[i]])
         
         # Error check IR-IS classification value
-        values[6] = str(values[6])
+        r_values[6] = str(values[header_dict[6]])
         try:
-            assert values[6] in ['IR', 'IS']
+            assert r_values[6] in ['IR', 'IS']
         except:
-            values[6] = None
+            r_values[6] = None
 
-        return values
+        return r_values
     except:
         return False
+
+# def check_subject_entry(values):
+#     try:
+#         #Ensure right amount of values
+#         assert len(values) == 7
+
+#         # Make sure there is an SubjectID
+#         values[0] = str(values[0])
+#         assert len(values[0]) > 0
+
+#         # Error check race value
+#         values[1] = str(values[1])
+#         try:
+#             assert len(values[1]) == 1
+#         except:
+#             values[1] = None
+
+#         # Error check sex value
+#         values[2] = str(values[2])
+#         try:
+#             assert values[2] in ['M', 'F']
+#         except:
+#             values[2] = None
+        
+#         # Error check Age, BMI, SSPG
+#         for i in range(3,6):
+#             values[i] = float(values[i])
+        
+#         # Error check IR-IS classification value
+#         values[6] = str(values[6])
+#         try:
+#             assert values[6] in ['IR', 'IS']
+#         except:
+#             values[6] = None
+
+#         return values
+#     except:
+#         return False
 
 
 def create_header_dict(headers, headers_order):
@@ -47,7 +86,7 @@ def create_header_dict(headers, headers_order):
     for i in range(len(headers)):
         for j in range(len(headers_order)):
             if headers[i] == headers_order[j]:
-                header_dict[i] = j
+                header_dict[j] = i
     return header_dict
 
 def load_file_data(subjects_filepath, delimeter=',', headers_order = None):
@@ -84,12 +123,17 @@ def insert_entries(data, table, db_cur, num_values):
 
 
 
-def load_subjects(db_filepath, subjects_file):
+def load_subjects(db_filepath, subjects_filepath, delimeter=',', headers_order=consts.SUBJECT_HEADERS_ORDER):
     # create db connection
     db_connection = sqlite3.connect(db_filepath)
     db_cur = db_connection.cursor()
 
-    file_data = load_file_data(subjects_file, delimeter=',',headers_order=consts.SUBJECT_HEADERS_ORDER)
+    #file_data = load_file_data(subjects_filepath, delimeter=',',headers_order=consts.SUBJECT_HEADERS_ORDER)
+    with open(subjects_filepath, 'r', encoding='utf-8-sig') as subject_file:
+        reader = csv.reader(subject_file, delimiter=delimeter)
+        headers = next(reader)
+        if headers_order:
+            header_dict = create_header_dict(headers, consts.SUBJECT_HEADERS_ORDER)
 
     file_data = filter(bool, map(check_subject_entry, file_data))
     insert_entries(file_data, 'Subject', db_cur, len(consts.SUBJECT_HEADERS_ORDER))

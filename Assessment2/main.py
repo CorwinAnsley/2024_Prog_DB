@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import timeit
 
 from load_db import load_subjects
 
@@ -36,4 +37,9 @@ if __name__ == '__main__':
 
     create_db(db_filepath)
 
+    
+    start = timeit.timeit()
+    
     load_subjects(db_filepath, subjects_filepath)
+    end = timeit.timeit()
+    print(end - start)
