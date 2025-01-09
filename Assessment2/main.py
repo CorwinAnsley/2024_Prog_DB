@@ -2,7 +2,7 @@ import sqlite3
 import os
 import timeit
 
-from load_db import load_subjects
+from load_db import load_db
 
 CREATE_DB_SQLS = './create_table_sqls/'
 
@@ -23,7 +23,8 @@ def create_db(db_filepath, sql_dir = CREATE_DB_SQLS):
                     sql += line#.strip()
                 try:
                     db_cur.execute(sql)
-                except:
+                except Exception as err:
+                    print(err)
                     pass
     
     db_connection.commit()
@@ -40,6 +41,7 @@ if __name__ == '__main__':
     
     start = timeit.timeit()
     
-    load_subjects(db_filepath, subjects_filepath)
+    #load_subjects(db_filepath, subjects_filepath)
+    load_db(db_filepath)
     end = timeit.timeit()
     print(end - start)
