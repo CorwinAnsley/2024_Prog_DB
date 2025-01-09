@@ -173,9 +173,27 @@ def insert_entries(data, table, db_cur, num_values):
     #print(next(data))
     db_cur.executemany(sql, data)
 
+def insert_two_entries(data, table, table2, db_cur, num_values, table2_num_values):
+    table1_num_values = num_values - table2_num_values
+    sql1 = f'INSERT OR IGNORE INTO {table} VALUES('
+    for i in range(table1_num_values-1):
+        sql1 += '?, '
+    
+    sql1 += '?);'
+    
+    sql2 = f'INSERT OR IGNORE INTO {table} VALUES('
+    for i in range(table1_num_values,table2_num_values-1):
+        sql2 += '?, '
+    
+    sql2 += '?);'
+    sql = f'{sql1}\n{sql2}'
+    print(sql)
+    #for 
+    #db_cur.executemany(sql, data)
+
 
 # Load all entries from a file to table in database
-def load_entries(db_filepath, table_name, entries_filepath, headers_order, delimeter=','):
+def load_entries(db_filepath, table_name, entries_filepath, headers_order, delimeter=',', table2_name = '', table2_num_values = 0):
     # create db connection
     db_connection = sqlite3.connect(db_filepath)
     db_cur = db_connection.cursor()
@@ -191,7 +209,10 @@ def load_entries(db_filepath, table_name, entries_filepath, headers_order, delim
 
         # Each entry is checked for errors and corrected, or filtered out
         entries_data = filter(bool, map(lambda entry : check_subject_entry(entry, header_dict), reader))
-        insert_entries(entries_data, table_name, db_cur, len(headers_order))
+        if table2_name != '':
+            insert_two_entries(entries_data, table_name, table2_name, db_cur, len(headers_order))
+        else:
+            insert_entries(entries_data, table_name, db_cur, len(headers_order))
 
     db_connection.commit()
     db_cur.close()
@@ -244,10 +265,9 @@ def parse_measurement_row(db_cur, tablename_measures, tablename_visits, row, hea
         print('n')
         print(err)
         return
-        
 
 def load_db(db_filepath):
-    # Load Suject entries
+    # Load Subject entries
     #load_entries(db_filepath, 'Subject', consts.SUBJECT_FILEPATH, consts.SUBJECT_HEADERS_ORDER, delimeter=',')
 
     load_measurements_visits(db_filepath, 'Measurement', 'Visit', 'MeasurementName', 'Transcriptome', consts.TRANSCRIPTOME_MEASURES_FILEPATH)
