@@ -6,4 +6,5 @@ TRANSCRIPTOME_MEASURES_FILEPATH = './data/HMP_transcriptome_abundance.tsv'
 PROTEOME_MEASURES_FILEPATH = './data/HMP_proteome_abundance.tsv'
 METABOLOME_MEASURES_FILEPATH = './data/HMP_metabolome_abundance.tsv'
 
-PEAKS_METABOLITES_HEADERS_ORDER = ['PeakID','Metabolite','KEGG','HMDB','Chemical Class','Pathway']
+PEAKS_METABOLITES_HEADERS_ORDER = ['Metabolite','KEGG','HMDB','Chemical Class','Pathway','PeakID']
+PEAKS_METABOLITES_FILEPATH = './data/HMP_metabolome_annotation.csv'
