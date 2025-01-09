@@ -86,6 +86,51 @@ def check_subject_entry(values, header_dict):
 #     except:
 #         return False
 
+def check_visit_entry(values):
+    try:
+        #Ensure right amount of values
+        assert len(values) == 2
+
+        #Check SubjectID and VisitID
+        values[0] = str(values[0])
+        assert len(values[0]) > 0
+
+        values[1] = str(values[1])
+        assert len(values[1]) > 0 
+
+        return values       
+    except Exception as err:
+        # If any error occurs return False to be filtered out
+        print('aaaa')
+        print(err)
+        return False
+
+def check_measurement_entry(values):
+    try:
+        #Ensure right amount of values
+        assert len(values) == 4
+
+        #Check Name, SubjectID and VisitID
+        values[0] = str(values[0])
+        assert len(values[0]) > 0
+
+        values[1] = str(values[1])
+        assert len(values[1]) > 0
+
+        values[2] = str(values[2])
+        assert len(values[2]) > 0
+
+        try:
+            values[3] = float(values[3])
+        except:
+            values[3] = None
+
+        return values       
+    except Exception as err:
+        # If any error occurs return False to be filtered out
+        print(err)
+        return False
+
 # Create dict with the key of table entry and value of position in the rows of headers
 def create_header_dict(headers, headers_order):
     header_dict = {}
@@ -152,7 +197,8 @@ def load_entries(db_filepath, table_name, entries_filepath, headers_order, delim
     db_cur.close()
     db_connection.close()
 
-def load_measurements_visits(db_filepath, tablename_measures, tablename_visits, entries_filepath, delimeter='\t'):
+
+def load_measurements_visits(db_filepath, tablename_measures, tablename_visits, tablename_measure_names, type, entries_filepath, delimeter='\t'):
         # create db connection
     db_connection = sqlite3.connect(db_filepath)
     db_cur = db_connection.cursor()
@@ -160,68 +206,43 @@ def load_measurements_visits(db_filepath, tablename_measures, tablename_visits, 
     # Open file with entries
     with open(entries_filepath, 'r', encoding='utf-8-sig') as entries_file:
         reader = csv.reader(entries_file, delimiter=delimeter)
-        # Get headers and create dict to shift columns as expected for db table
+        # Get headers, check they are all valid and use to populate MeasurementName table
         headers = next(reader)
-        #print(parse_measurement_row(db_cur, next(reader), headers))
-        map(lambda row : parse_measurement_row(db_cur, tablename_measures, tablename_visits, row, headers), reader)
+        measurement_names = []
+        for header in headers:
+            try:
+                header = str(header)
+                if len(header) > 0:
+                    measurement_names.append([header,type])
+            except:
+                pass
+        
+        insert_entries(measurement_names, tablename_measure_names, db_cur, 2)
 
-def check_visit_entry(values):
-    try:
-        #Ensure right amount of values
-        assert len(values) == 2
-
-        #Check SubjectID and VisitID
-        values[0] = str(values[0])
-        assert len(values[0]) > 0
-
-        values[1] = str(values[1])
-        assert len(values[1]) > 0        
-    except Exception as err:
-        # If any error occurs return False to be filtered out
-        print(err)
-        return False
-
-def check_measurement_entry(values):
-    try:
-        #Ensure right amount of values
-        assert len(values) == 4
-
-        #Check Name, SubjectID and VisitID
-        values[0] = str(values[0])
-        assert len(values[0]) > 0
-
-        values[1] = str(values[1])
-        assert len(values[1]) > 0
-
-        values[2] = str(values[2])
-        assert len(values[2]) > 0
-
-        try:
-            values[3] = float(values[3])
-        except:
-            values[3] = None        
-    except Exception as err:
-        # If any error occurs return False to be filtered out
-        print(err)
-        return False
-
+        #parse_measurement_row(db_cur, tablename_measures, tablename_visits, next(reader), headers)
+        #map(lambda row : parse_measurement_row(db_cur, tablename_measures, tablename_visits, row, headers), reader)
+        for row in reader:
+            parse_measurement_row(db_cur, tablename_measures, tablename_visits, row, headers)
+    
+    db_connection.commit()
+    db_cur.close()
+    db_connection.close()
 
 def parse_measurement_row(db_cur, tablename_measures, tablename_visits, row, headers):
     try:
         SubjectID, VisitID = row[0].split('-')
         assert check_visit_entry([VisitID, SubjectID])
         insert_entries([[VisitID,SubjectID]], tablename_visits, db_cur, 2)
-        print(f'{SubjectID} --- {VisitID}')
-        row_data = [VisitID, SubjectID]
+        row_data = []
         for i in range(1,len(row)):
             values = [headers[i],VisitID,SubjectID,row[i]]
             values = check_measurement_entry(values)
             if values:
                 row_data.append([headers[i],VisitID,SubjectID,row[i]])
-        
-
         insert_entries(row_data, tablename_measures, db_cur, 4)
-    except:
+    except Exception as err:
+        print('n')
+        print(err)
         return
         
 
@@ -229,4 +250,6 @@ def load_db(db_filepath):
     # Load Suject entries
     #load_entries(db_filepath, 'Subject', consts.SUBJECT_FILEPATH, consts.SUBJECT_HEADERS_ORDER, delimeter=',')
 
-    load_measurements_visits(db_filepath, 'Measurements', consts.TRANSCRIPTOME_MEASURES_FILEPATH)
+    load_measurements_visits(db_filepath, 'Measurement', 'Visit', 'MeasurementName', 'Transcriptome', consts.TRANSCRIPTOME_MEASURES_FILEPATH)
+    load_measurements_visits(db_filepath, 'Measurement', 'Visit', 'MeasurementName', 'Proteome', consts.PROTEOME_MEASURES_FILEPATH)
+    load_measurements_visits(db_filepath, 'Measurement', 'Visit', 'MeasurementName', 'Metabolome', consts.METABOLOME_MEASURES_FILEPATH)
