@@ -1,0 +1,3 @@
+SELECT VisitID
+FROM Visit
+WHERE Visit.SubjectID = 'ZNQOVZV'
