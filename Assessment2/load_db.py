@@ -43,9 +43,8 @@ def check_subject_entry(values, header_dict):
             r_values[6] = None
 
         return r_values
-    except Exception as err:
+    except:
         # If any error occurs return False to be filtered out
-        print(err)
         return False
 
 def check_visit_entry(values):
@@ -61,9 +60,8 @@ def check_visit_entry(values):
         assert len(values[1]) > 0 
 
         return values       
-    except Exception as err:
+    except:
         # If any error occurs return False to be filtered out
-        print(err)
         return False
 
 # Error check measurements
@@ -88,15 +86,13 @@ def check_measurement_entry(values):
             values[3] = None
 
         return values       
-    except Exception as err:
+    except Exception:
         # If any error occurs return False to be filtered out
-        print(err)
         return False
 
 # Error check peaks and metabolomes
 def check_peak_metab_entry(values, header_dict):
     try:
-        print(header_dict)
         r_values = [None]*7
 
         #Check SubjectID and VisitID
@@ -109,15 +105,12 @@ def check_peak_metab_entry(values, header_dict):
         r_values[5] = str(values[header_dict[5]])
         assert len(r_values[1]) > 0
 
-        print('a')
         #Copy Metabolite nname for PeakID table
         r_values[6] = r_values[0]
 
         return r_values
-    except Exception as err:
+    except:
         # If any error occurs return False to be filtered out
-        print(err)
-        print('e')
         return False
 
 # Create dict with the key of table entry and value of position in the rows of headers
@@ -157,7 +150,6 @@ def insert_peak_metab_entries(data, table, table2, db_cur, num_values, table2_nu
     #sql = f'{sql1}\n{sql2}'
   
     for row in data:
-        print(row[:table1_num_values])
         db_cur.execute(sql1,row[:table1_num_values])
         db_cur.execute(sql2,row[table1_num_values:])
     #db_cur.executemany(sql, data)

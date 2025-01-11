@@ -1,3 +1,5 @@
+CREATE_DB_SQLS = './create_table_sqls/'
+QUERY_DB_SQLS = './query_sqls/'
 
 SUBJECT_HEADERS_ORDER = ['SubjectID','Race','Sex','Age','BMI','SSPG','IR_IS_classification']
 SUBJECT_FILEPATH = './data/Subject.csv'
