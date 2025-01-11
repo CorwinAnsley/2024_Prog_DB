@@ -166,7 +166,9 @@ data_files/
 BioProgPy/data/
 db/Lab4/LabCovid
 Assessment2/data/
+Assessment1/*.txt
+BioProgPy/Coursework/data/
 
 # db files
-.db
-.db-journal
+*.db
+*.db-journal
