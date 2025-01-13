@@ -1,0 +1,11 @@
+name: biopy_cw_2266643
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+dependencies:
+  - python=3.12
+  - pip
+  - pyvcf3
+  - gffutils
+  - biopython
