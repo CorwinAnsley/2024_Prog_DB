@@ -35,7 +35,7 @@ def get_variants(vcf_filename, logger, min_quality = 20):
                     if int(record.POS) in variants_chromosome_dict[record.CHROM]['variants']:
                         variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)]['alts'].append(record.ALT)
                     else:
-                        variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)] = {'ref':record.REF, 'alts':record.ALT}
+                        variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)] = {'ref':record.REF, 'alts':[record.ALT]}
                         bisect.insort_right(variants_chromosome_dict[record.CHROM]['sorted_pos_keys'], record.POS)
                 else:
                     variants_chromosome_dict[record.CHROM] = {}
@@ -127,7 +127,7 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                         cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
                         del found_variants[lower_bound_non_syn:upper_bound_non_syn]
 
-                        if count < 6:
+                        if count < 8:
                             if len(cds_variants) > 0:
                                 seq = cds.sequence(genome_fasta, use_strand=True)
                                 prot_seq1 = Seq(seq).translate()
@@ -135,13 +135,20 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                                     #print(cds.start)
                                     #print(pos)
                                     relative_pos = pos - cds.start
-                                    print(chromosome_variants['variants'][pos]['alts'])
-                                    for alt in chromosome_variants['variants'][pos]['alts']:
-                                        print(type(alt))
-                                        
-                                    s = s[:index] + newstring + s[index + 1:]
-                                    print(relative_pos)
-                                    print(prot_seq1)
+                                    #print(chromosome_variants['variants'][pos]['alts'])
+                                    for alts in chromosome_variants['variants'][pos]['alts']:
+                                        for alt in alts:
+                                            alt = str(alt)
+                                            ref = str(chromosome_variants['variants'][pos]['ref'])
+                                            seq_ref = seq[relative_pos-8:relative_pos+8]
+                                            for i in range(len(seq_ref)):
+                                                if ref == seq_ref[i]:
+                                                    print(i)
+                                            #print(f'r:{ref}')
+                                            #print(f's:{seq_ref}')
+                                            #alt_seq = seq[:pos] + alt + s[pos + 1:]
+                                    #print(relative_pos)
+                                    #print(prot_seq1)
                             #print(len(seq)/3)
                             #print(seq)
                         #if len(child_variants) > 0:
