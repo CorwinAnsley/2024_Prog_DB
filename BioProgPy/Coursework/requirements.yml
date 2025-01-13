@@ -1,0 +1,4 @@
+name: bioprog_coursework_2266643
+channels:
+  - conda-forge
+  - defaults
