@@ -110,7 +110,9 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             for gene in genes:
                 count += 1
                 #gene = next(genes)
-                if gene.chrom in variants_chromosome_dict:   
+                if gene.chrom in variants_chromosome_dict: 
+                    # if count < 10:
+                    #     print(gene.strand)  
                     chromosome_variants = variants_chromosome_dict[gene.chrom]
                     lower_bound_variants, upper_bound_variants = find_variants_for_feature(gene.start, gene.end, chromosome_variants['sorted_pos_keys'])
                     found_variants = chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]
@@ -124,7 +126,8 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
 
                         if count < 10:
                             seq = cds.sequence(genome_fasta, use_strand=True)
-                            print(seq)
+                            print(len(seq)/3)
+                            #print(seq)
                         #if len(child_variants) > 0:
                             
                             #for pos in child_variants 
