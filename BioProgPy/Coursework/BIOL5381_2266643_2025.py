@@ -74,14 +74,31 @@ def get_feature_db(gff_filename):
         logger.error(f'Error loading gene file: {err}')
         return None
 
+def find_variants_for_gene(gene, chromosome_variants):
+    gene_start = gene.start
+    gene_end = gene.end
+    
+    assert gene_start < gene_end
+
+    lower_bound_variants = bisect.bisect_left(chromosome_variants['sorted_pos_keys'], gene_start)
+    upper_bound_variants = bisect.bisect_right(chromosome_variants['sorted_pos_keys'], gene_end, lo=lower_bound_variants)
+
+    return lower_bound_variants, upper_bound_variants
 
 def sort_variants_by_feature(variants_chromosome_dict, db, results_filename):
     try:
         #for feature in db.all
-        features = db.all_features()
-        for i in range(50):
-            for child in next(features).children:
-                print(child.featuretype)
+        genes = db.all_features(featuretype='protein_coding_gene')
+        for i in range(10):
+            gene = next(genes)
+                
+            chromosome_variants = variants_chromosome_dict[gene.chrom]
+            lower_bound_variants, upper_bound_variants = find_variants_for_gene(gene, chromosome_variants)
+            for child in db.children(gene.id, featuretype='CDS'):
+                for 
+            #for pos in chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]:
+
+            
     except Exception as err:
         logger.error(f'Error generatng variants: {err}')
         return None
