@@ -1,8 +1,9 @@
 import argparse
 import logging
-import os
+import csv
 import bisect
 from os.path import isfile
+
 import vcf
 import gffutils as gff
 
@@ -36,7 +37,7 @@ def get_variants(vcf_filename, logger, min_quality = 20):
                 else:
                     variants_chromosome_dict[record.CHROM] = {}
                     variants_chromosome_dict[record.CHROM]['sorted_pos_keys'] = [int(record.POS)]
-                    #variants_chromosome_dict[record.CHROM]['found_pos'] = []
+                    variants_chromosome_dict[record.CHROM]['found_pos'] = []
                     variants_chromosome_dict[record.CHROM]['variants'] = {}
                     variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)] = {'ref':record.REF, 'alts':[record.ALT]}
 
@@ -44,6 +45,11 @@ def get_variants(vcf_filename, logger, min_quality = 20):
                 #     print(record.ID)
             else:
                 non_q_count += 1
+        
+        # for chromosome in variants_chromosome_dict:
+        #     # Later variants will be removed from this list as they are found in genes, leaving only the non-coding genes
+        #     variants_chromosome_dict[chromosome]['non-coding_pos'] = variants_chromosome_dict[chromosome]['sorted_pos_keys']
+
         logger.info(f'{non_q_count} variants with quality score below {min_quality}\n')
         return variants_chromosome_dict
     
@@ -74,33 +80,61 @@ def get_feature_db(gff_filename):
         logger.error(f'Error loading gene file: {err}')
         return None
 
-def find_variants_for_gene(gene, chromosome_variants):
-    gene_start = gene.start
-    gene_end = gene.end
+def find_variants_for_feature(start, end, pos_list):
+    # print('Gene:')
+    # print(gene_start)
+    # print(gene_end)
+    # print('--')
     
-    assert gene_start < gene_end
+    assert start < end
 
-    lower_bound_variants = bisect.bisect_left(chromosome_variants['sorted_pos_keys'], gene_start)
-    upper_bound_variants = bisect.bisect_right(chromosome_variants['sorted_pos_keys'], gene_end, lo=lower_bound_variants)
+    lower_bound_variants = bisect.bisect_left(pos_list, start)
+    upper_bound_variants = bisect.bisect_right(pos_list, end, lo=lower_bound_variants)
 
     return lower_bound_variants, upper_bound_variants
 
-def sort_variants_by_feature(variants_chromosome_dict, db, results_filename):
+def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename):
     try:
         #for feature in db.all
+        if not isfile(results_filename):
+            raise Exception('file does not exist')
+        
+        if not (results_filename.endswith('.csv') or results_filename.endswith('.tsv')):
+            results_filename += '.tsv'
+        
         genes = db.all_features(featuretype='protein_coding_gene')
-        for i in range(10):
-            gene = next(genes)
-                
-            chromosome_variants = variants_chromosome_dict[gene.chrom]
-            lower_bound_variants, upper_bound_variants = find_variants_for_gene(gene, chromosome_variants)
-            for child in db.children(gene.id, featuretype='CDS'):
-                for 
-            #for pos in chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]:
+        with open(results_filename, 'w',newline="") as results_tsv:
+            results_writer = csv.writer(results_tsv, delimiter='\t')
+            #for i in range(10):
+            count = 0
+            for gene in genes:
+                count += 1
+                #gene = next(genes)
+                if gene.chrom in variants_chromosome_dict:   
+                    chromosome_variants = variants_chromosome_dict[gene.chrom]
+                    lower_bound_variants, upper_bound_variants = find_variants_for_feature(gene.start, gene.end, chromosome_variants['sorted_pos_keys'])
+                    found_variants = chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]
+                    for pos in found_variants:
+                        chromosome_variants['found_pos'].append(pos)
 
-            
+                    for cds in db.children(gene.id, featuretype='CDS'):
+                        lower_bound_non_syn, upper_bound_non_syn = find_variants_for_feature(cds.start, cds.end, found_variants)
+                        cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
+                        del found_variants[lower_bound_non_syn:upper_bound_non_syn]
+
+                        if count < 10:
+                            seq = cds.sequence(genome_fasta, use_strand=True)
+                            print(seq)
+                        #if len(child_variants) > 0:
+                            
+                            #for pos in child_variants 
+                    # for pos in chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]:
+                    #     if len(str(pos)) > 1:
+                    #         results_writer.writerow([str(pos),str(gene.chrom)])
+
+            print(count)
     except Exception as err:
-        logger.error(f'Error generatng variants: {err}')
+        logger.error(f'Error generating results: {err}')
         return None
 
 
@@ -108,6 +142,8 @@ if __name__ == '__main__':
     #vcf_filename = './data/Toy_Data/testData.vcf'
     vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
     gff_filename = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7.gff'
+    genome_fasta = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta'
+    results_filename = './results.tsv'
     
 
     logger = logging.getLogger()
@@ -119,5 +155,5 @@ if __name__ == '__main__':
     
     variants_chromosome_dict = get_variants(vcf_filename, logger)
     db = get_feature_db(gff_filename)
-    sort_variants_by_feature(variants_chromosome_dict, db, '')
+    sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename)
     print('a')
