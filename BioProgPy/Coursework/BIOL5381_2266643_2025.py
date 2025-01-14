@@ -182,7 +182,7 @@ def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genom
                                     #print(cds.start)
                                     #print(pos)
                                     relative_pos = pos - cds_start
-                                    print('--')
+                                    #print('--')
                                     # if cds_start < 250000:
                                     #     if gene.chrom == 'Pf3D7_01_v3':
                                     #         print(seq)
