@@ -11,6 +11,11 @@ import vcf
 import gffutils as gff
 from Bio.Seq import Seq
 
+COMP_DICT = {'A': 'T',
+             'T': 'A',
+             'G': 'C',
+             'C': 'G'}
+
 # Loops through variants in vcf file
 # Returns a dict of all variants which meet the minimum quatity threshold for each chromosome, and a sorted list of their positions which are used as keys
 # Multiple variations can be stored with the same position
@@ -98,7 +103,16 @@ def find_variants_for_feature(start, end, pos_list):
 
     return lower_bound_variants, upper_bound_variants
 
-def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename):
+def get_chromosome_pos_dict(chromosome_filepath):
+    chrom_pos_dict = {}
+    with open(chromosome_filepath) as chrom_file:
+        chrom_reader = csv.reader(chrom_file, delimiter='\t')
+        for chrom in chrom_reader:
+            chrom_pos_dict[chrom[0]] = [chrom[1],chrom[2]]
+    
+    return chrom_pos_dict
+
+def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genome_fasta, results_filename):
     try:
         #for feature in db.all
         # if not isfile(results_filename):
@@ -112,22 +126,32 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             results_writer = csv.writer(results_tsv, delimiter='\t')
             #for i in range(10):
             count = 0
+            cds_count = 0
             for gene in genes:
                 count += 1
+                # if count < 15:
+                #             print('gene:')
+                #             print(gene.chrom)
+                #             print(gene.start)
                 #gene = next(genes)
                 if gene.chrom in variants_chromosome_dict: 
                     # if count < 10:
                     #     print(gene.strand)  
                     chromosome_variants = variants_chromosome_dict[gene.chrom]
-                    gene_len = gene.end - gene.start
-                    lower_bound_variants, upper_bound_variants = find_variants_for_feature(0, gene_len, chromosome_variants['sorted_pos_keys'])
+                    chrom_start = int(chrom_pos_dict[gene.chrom][0])
+                    #gene_len = gene.end - gene.start
+                    chrom_gene_start = gene.start #- chrom_start
+                    chrom_gene_end = gene.end #- chrom_start
+
+                    
+                    lower_bound_variants, upper_bound_variants = find_variants_for_feature(chrom_gene_start, chrom_gene_end, chromosome_variants['sorted_pos_keys'])
                     found_variants = chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]
                     for pos in found_variants:
                         chromosome_variants['found_pos'].append(pos)
 
                     for cds in db.children(gene.id, featuretype='CDS'):
-                        cds_start = cds.start - gene.start
-                        cds_end = cds.end - gene.start
+                        cds_start = cds.start #- chrom_start
+                        cds_end = cds.end #- chrom_start
                         try:
                             lower_bound_non_syn, upper_bound_non_syn = find_variants_for_feature(cds_start, cds_end, found_variants)
                         except:
@@ -138,26 +162,46 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                         cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
                         del found_variants[lower_bound_non_syn:upper_bound_non_syn]
 
-                        if count < 2:
-                            print('type:')
-                            print(type(gene.chrom))
+                        if count < 12: #40000:
+                            # print('---')
+                            # print(cds.start)
+                            # print(cds_start)
+                            # print(chrom_start)
+                            #print(cds_end)
                             if len(cds_variants) > 0:
-                                seq = cds.sequence(genome_fasta)
+                                cds_count += 1
+                                seq = cds.sequence(genome_fasta,use_strand=False)
+
+                                if len(seq) != (cds_end-cds_start+1):
+                                    print('aha!')
+                                    print(len(seq))
+                                    print(cds_end-cds_start+1)
+
                                 #prot_seq1 = Seq(seq).translate()
                                 for pos in cds_variants:
                                     #print(cds.start)
                                     #print(pos)
                                     relative_pos = pos - cds_start
-                                    #print(chromosome_variants['variants'][pos]['alts'])
+                                    print('--')
+                                    # if cds_start < 250000:
+                                    #     if gene.chrom == 'Pf3D7_01_v3':
+                                    #         print(seq)
+                                    #         print(cds_start)
+                                    #print(f'a:{chromosome_variants['variants'][pos]['alts'][0][0]}')
                                     for alts in chromosome_variants['variants'][pos]['alts']:
                                         for alt in alts:
+                                            # print(pos)
+                                            # print(cds_start)
+                                            # print(cds_end)
+                                            # print(relative_pos)
                                             alt = str(alt)
                                             ref = str(chromosome_variants['variants'][pos]['ref'])
-                                            seq_ref = seq[relative_pos-2:+relative_pos+2]
-                                            print('--')
+                                            #seq_ref = seq[::-1]
+                                            seq_ref = seq[relative_pos]
                                             for i in range(len(seq_ref)):
                                                 if ref == seq_ref[i]:
-                                                    print(i)
+                                                    #print(i)
+                                                    pass
                                             print(f'r:{ref}')
                                             print(f's:{seq_ref}')
                                             #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
@@ -186,6 +230,7 @@ if __name__ == '__main__':
     gff_filename = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7.gff'
     genome_fasta = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta'
     results_filename = './results.tsv'
+    chromosome_filepath = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta.fai'
     
 
     logger = logging.getLogger()
@@ -195,7 +240,10 @@ if __name__ == '__main__':
     #handler.setFormatter(logging.Formatter('%(levelname)s - %(asctime)s - %(message)s'))
     #logger.addHandler(handler)
     
+    chrom_pos_dict = get_chromosome_pos_dict(chromosome_filepath)
+    #print(chrom_pos_dict)
+
     variants_chromosome_dict = get_variants(vcf_filename, logger)
     db = get_feature_db(gff_filename)
-    sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename)
+    sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genome_fasta, results_filename)
     print('a')
