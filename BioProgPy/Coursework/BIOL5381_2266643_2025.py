@@ -3,6 +3,7 @@ import logging
 import csv
 import bisect
 import traceback
+import sys
 
 from os.path import isfile
 
@@ -90,6 +91,7 @@ def find_variants_for_feature(start, end, pos_list):
     # print('--')
     
     assert start < end
+    
 
     lower_bound_variants = bisect.bisect_left(pos_list, start)
     upper_bound_variants = bisect.bisect_right(pos_list, end, lo=lower_bound_variants)
@@ -117,25 +119,28 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                     # if count < 10:
                     #     print(gene.strand)  
                     chromosome_variants = variants_chromosome_dict[gene.chrom]
-                    lower_bound_variants, upper_bound_variants = find_variants_for_feature(gene.start, gene.end, chromosome_variants['sorted_pos_keys'])
+                    gene_len = gene.end - gene.start
+                    lower_bound_variants, upper_bound_variants = find_variants_for_feature(0, gene_len, chromosome_variants['sorted_pos_keys'])
                     found_variants = chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]
                     for pos in found_variants:
                         chromosome_variants['found_pos'].append(pos)
 
                     for cds in db.children(gene.id, featuretype='CDS'):
-                        lower_bound_non_syn, upper_bound_non_syn = find_variants_for_feature(cds.start, cds.end, found_variants)
+                        cds_start = cds.start - gene.start
+                        cds_end = cds.end - gene.start
+                        lower_bound_non_syn, upper_bound_non_syn = find_variants_for_feature(cds_start, cds_end, found_variants)
                         cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
                         del found_variants[lower_bound_non_syn:upper_bound_non_syn]
 
                         if count < 8:
                             if len(cds_variants) > 0:
                                 seq = cds.sequence(genome_fasta, use_strand=True)
-                                prot_seq1 = Seq(seq).translate()
+                                #prot_seq1 = Seq(seq).translate()
                                 for pos in cds_variants:
                                     #print(cds.start)
                                     #print(pos)
                                     relative_pos = pos - cds.start
-                                    #print(chromosome_variants['variants'][pos]['alts'])
+                                    print(chromosome_variants['variants'][pos]['alts'])
                                     for alts in chromosome_variants['variants'][pos]['alts']:
                                         for alt in alts:
                                             alt = str(alt)
@@ -145,7 +150,7 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                                                 if ref == seq_ref[i]:
                                                     print(i)
                                             #print(f'r:{ref}')
-                                            #print(f's:{seq_ref}')
+                                            print(f's:{seq_ref}')
                                             #alt_seq = seq[:pos] + alt + s[pos + 1:]
                                     #print(relative_pos)
                                     #print(prot_seq1)
@@ -161,6 +166,8 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             print(count)
     except Exception as err:
         logger.error(f'Error generating results: {err}; {traceback.format_exc}')
+        exc_info = sys.exc_info()
+        traceback.print_exception(*exc_info)
         return None
 
 
