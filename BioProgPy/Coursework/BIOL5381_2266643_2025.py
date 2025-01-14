@@ -185,22 +185,25 @@ def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genom
                                         print(len(seq_segments[0]) % 3)
                                         mod_3_pre_seq = len(seq_segments[0]) % 3
                                         remainder_pre_seq = seq_segments[0][:mod_3_pre_seq]
+                                        seq += remainder_pre_seq
                                         print(f'rem:{remainder_pre_seq}')
-                                #prot_seq1 = Seq(seq).translate()
-                                    for pos in cds_variants:
-                                        relative_pos = pos - cds_start
-                                        #print('--')
-                                        #print(f'a:{chromosome_variants['variants'][pos]['alts'][0][0]}')
-                                        for alts in chromosome_variants['variants'][pos]['alts']:
-                                            for alt in alts:
-                                                alt = str(alt)
-                                                ref = str(chromosome_variants['variants'][pos]['ref'])
-                                                #seq_ref = seq[::-1]
-                                                seq_ref = seq[relative_pos]
-                                                for i in range(len(seq_ref)):
-                                                    if ref == seq_ref[i]:
-                                                        #print(i)
-                                                        pass
+                                        pos_adjust = cds_start - len(remainder_pre_seq)
+
+                                        #prot_seq1 = Seq(seq).translate()
+                                        for pos in cds_variants:
+                                            relative_pos = pos - pos_adjust
+                                            #ref = str(chromosome_variants['variants'][pos]['ref'])
+                                            #print('--')
+                                            for alts in chromosome_variants['variants'][pos]['alts']:
+                                                for alt in alts:
+                                                    alt = str(alt)
+                                                    
+                                                    #seq_ref = seq[::-1]
+                                                    seq_ref = seq[relative_pos]
+                                                    for i in range(len(seq_ref)):
+                                                        if ref == seq_ref[i]:
+                                                            #print(i)
+                                                            pass
                                             # print(f'r:{ref}')
                                             # print(f's:{seq_ref}')
                                             #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
