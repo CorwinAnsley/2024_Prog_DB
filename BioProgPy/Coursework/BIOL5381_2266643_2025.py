@@ -95,7 +95,7 @@ def find_variants_for_feature(start, end, pos_list):
     # print(gene_end)
     # print('--')
     
-    assert start < end
+    assert start <= end
     
 
     lower_bound_variants = bisect.bisect_left(pos_list, start)
@@ -155,63 +155,59 @@ def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genom
                         try:
                             lower_bound_non_syn, upper_bound_non_syn = find_variants_for_feature(cds_start, cds_end, found_variants)
                         except:
-                            pass
-                            # print('##cds##')
-                            # print(cds_start)
-                            # print(cds_end)
+                            print(f'{cds.start}:{cds.end}')
+
                         cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
                         del found_variants[lower_bound_non_syn:upper_bound_non_syn]
 
-                        if count < 12: #40000:
+                        if count < 10: #40000:
                             # print('---')
                             # print(cds.start)
                             # print(cds_start)
                             # print(chrom_start)
                             #print(cds_end)
                             if len(cds_variants) > 0:
-                                cds_count += 1
-                                seq = cds.sequence(genome_fasta,use_strand=False)
+                                #cds_count += 1
+                                seq = cds.sequence(genome_fasta,use_strand=True)
+                                seq_segments = ['','']
+                                for mRNA in db.parents(cds.id,featuretype='mRNA'):
+                                    #print('a')
+                                    if mRNA.strand == '+':
+                                        for cds_child in db.children(mRNA.id, featuretype='CDS', order_by='start'):
+                                            if cds_child.id == cds.id:
+                                                seq_segments[0] = seq_segments[1]
+                                                seq_segments[1] = ''
+                                            else:
+                                                seq_segments[1] += cds_child.sequence(genome_fasta,use_strand=True)
 
-                                if len(seq) != (cds_end-cds_start+1):
-                                    print('aha!')
-                                    print(len(seq))
-                                    print(cds_end-cds_start+1)
-
+                                        print(seq_segments)
+                                        print(len(seq_segments[0]))
+                                        print(len(seq_segments[0]) % 3)
+                                        mod_3_pre_seq = len(seq_segments[0]) % 3
+                                        remainder_pre_seq = seq_segments[0][:mod_3_pre_seq]
+                                        print(f'rem:{remainder_pre_seq}')
                                 #prot_seq1 = Seq(seq).translate()
-                                for pos in cds_variants:
-                                    #print(cds.start)
-                                    #print(pos)
-                                    relative_pos = pos - cds_start
-                                    #print('--')
-                                    # if cds_start < 250000:
-                                    #     if gene.chrom == 'Pf3D7_01_v3':
-                                    #         print(seq)
-                                    #         print(cds_start)
-                                    #print(f'a:{chromosome_variants['variants'][pos]['alts'][0][0]}')
-                                    for alts in chromosome_variants['variants'][pos]['alts']:
-                                        for alt in alts:
-                                            # print(pos)
-                                            # print(cds_start)
-                                            # print(cds_end)
-                                            # print(relative_pos)
-                                            alt = str(alt)
-                                            ref = str(chromosome_variants['variants'][pos]['ref'])
-                                            #seq_ref = seq[::-1]
-                                            seq_ref = seq[relative_pos]
-                                            for i in range(len(seq_ref)):
-                                                if ref == seq_ref[i]:
-                                                    #print(i)
-                                                    pass
-                                            print(f'r:{ref}')
-                                            print(f's:{seq_ref}')
+                                    for pos in cds_variants:
+                                        relative_pos = pos - cds_start
+                                        #print('--')
+                                        #print(f'a:{chromosome_variants['variants'][pos]['alts'][0][0]}')
+                                        for alts in chromosome_variants['variants'][pos]['alts']:
+                                            for alt in alts:
+                                                alt = str(alt)
+                                                ref = str(chromosome_variants['variants'][pos]['ref'])
+                                                #seq_ref = seq[::-1]
+                                                seq_ref = seq[relative_pos]
+                                                for i in range(len(seq_ref)):
+                                                    if ref == seq_ref[i]:
+                                                        #print(i)
+                                                        pass
+                                            # print(f'r:{ref}')
+                                            # print(f's:{seq_ref}')
                                             #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
                                     #print(relative_pos)
                                     #print(prot_seq1)
                             #print(len(seq)/3)
-                            #print(seq)
-                        #if len(child_variants) > 0:
-                            
-                            #for pos in child_variants 
+
                     # for pos in chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]:
                     #     if len(str(pos)) > 1:
                     #         results_writer.writerow([str(pos),str(gene.chrom)])
