@@ -103,16 +103,67 @@ def find_variants_for_feature(start, end, pos_list):
 
     return lower_bound_variants, upper_bound_variants
 
-def get_chromosome_pos_dict(chromosome_filepath):
-    chrom_pos_dict = {}
-    with open(chromosome_filepath) as chrom_file:
-        chrom_reader = csv.reader(chrom_file, delimiter='\t')
-        for chrom in chrom_reader:
-            chrom_pos_dict[chrom[0]] = [chrom[1],chrom[2]]
-    
-    return chrom_pos_dict
 
-def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genome_fasta, results_filename):
+# Returns the codon, and alternative codon of a sequence with SNP
+# Input sequence should already be adjusted to start at the first codon and continue until at least the last codon the snp could be located at
+def get_alt_codon(seq, pos, alt):
+    # Get the sequence up until the SNP
+    alt_codon = seq[:pos]
+
+    # Get rid of everything before the codon
+    seq_mod_3 = len(alt_codon) % 3
+    if seq_mod_3 > 0:
+        alt_codon = alt_codon[-seq_mod_3:]  
+    else:
+        alt_codon = ''
+    
+    # Add the base at the site of the SNP, we need 2 codons for the reference and the alternative
+    codon = alt_codon
+    codon += seq[pos]
+    alt_codon += alt
+
+    # Add the rest of the codon if missing
+    seq_len = len(alt_codon)
+    rest_of_codon_seq = seq[pos+1:pos+4-seq_len]
+    codon += rest_of_codon_seq
+    alt_codon += rest_of_codon_seq
+
+    return codon, alt_codon
+
+# Returns a sequence generated from a coding region, with a buffer either side to line up with codons
+# Eg. If the region starts mid codon include the bases to make up that codon from the previous coding region
+def get_adjusted_cds(mRNA, seq, cds):
+    #print('a')
+    
+    seq_segments = ['','']
+    pre_seq = True
+    for cds_child in db.children(mRNA.id, featuretype='CDS', order_by='start'):
+        if cds_child.id == cds.id:
+            pre_seq = False
+        else:
+            if pre_seq:
+                seq_segments[0] += cds_child.sequence(genome_fasta,use_strand=True)
+            else:
+                if len(seq_segments) > 2:
+                    break
+                else:
+                    seq_segments[1] += cds_child.sequence(genome_fasta,use_strand=True)
+
+    mod_3_pre_seq = len(seq_segments[0]) % 3
+
+    if mod_3_pre_seq > 0:
+        remainder_pre_seq = seq_segments[0][-mod_3_pre_seq:] 
+    else:
+        remainder_pre_seq = ''
+
+    seq_adj = remainder_pre_seq + seq
+    seq_adj += seq_segments[1][:2]
+    #print(f'rem:{remainder_pre_seq}')
+    pos_adjust = cds.start - len(remainder_pre_seq)
+    
+    return seq_adj, pos_adjust
+
+def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename):
     try:
         #for feature in db.all
         # if not isfile(results_filename):
@@ -129,22 +180,13 @@ def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genom
             cds_count = 0
             for gene in genes:
                 count += 1
-                # if count < 15:
-                #             print('gene:')
-                #             print(gene.chrom)
-                #             print(gene.start)
-                #gene = next(genes)
                 if gene.chrom in variants_chromosome_dict: 
                     # if count < 10:
                     #     print(gene.strand)  
                     chromosome_variants = variants_chromosome_dict[gene.chrom]
-                    chrom_start = int(chrom_pos_dict[gene.chrom][0])
                     #gene_len = gene.end - gene.start
-                    chrom_gene_start = gene.start #- chrom_start
-                    chrom_gene_end = gene.end #- chrom_start
 
-                    
-                    lower_bound_variants, upper_bound_variants = find_variants_for_feature(chrom_gene_start, chrom_gene_end, chromosome_variants['sorted_pos_keys'])
+                    lower_bound_variants, upper_bound_variants = find_variants_for_feature(gene.start, gene.end, chromosome_variants['sorted_pos_keys'])
                     found_variants = chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]
                     for pos in found_variants:
                         chromosome_variants['found_pos'].append(pos)
@@ -160,52 +202,45 @@ def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genom
                         cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
                         del found_variants[lower_bound_non_syn:upper_bound_non_syn]
 
-                        if count < 10: #40000:
+                        if count < 100000000000000000: #40000:
                             # print('---')
-                            # print(cds.start)
-                            # print(cds_start)
-                            # print(chrom_start)
-                            #print(cds_end)
                             if len(cds_variants) > 0:
                                 #cds_count += 1
                                 seq = cds.sequence(genome_fasta,use_strand=True)
-                                seq_segments = ['','']
+
                                 for mRNA in db.parents(cds.id,featuretype='mRNA'):
-                                    #print('a')
                                     if mRNA.strand == '+':
-                                        for cds_child in db.children(mRNA.id, featuretype='CDS', order_by='start'):
-                                            if cds_child.id == cds.id:
-                                                seq_segments[0] = seq_segments[1]
-                                                seq_segments[1] = ''
-                                            else:
-                                                seq_segments[1] += cds_child.sequence(genome_fasta,use_strand=True)
-
-                                        print(seq_segments)
-                                        print(len(seq_segments[0]))
-                                        print(len(seq_segments[0]) % 3)
-                                        mod_3_pre_seq = len(seq_segments[0]) % 3
-                                        remainder_pre_seq = seq_segments[0][:mod_3_pre_seq]
-                                        seq += remainder_pre_seq
-                                        print(f'rem:{remainder_pre_seq}')
-                                        pos_adjust = cds_start - len(remainder_pre_seq)
-
+                                        seq_adj, pos_adjust = get_adjusted_cds(mRNA, seq, cds)
+                                        
                                         #prot_seq1 = Seq(seq).translate()
                                         for pos in cds_variants:
                                             relative_pos = pos - pos_adjust
-                                            #ref = str(chromosome_variants['variants'][pos]['ref'])
+                                            ref = str(chromosome_variants['variants'][pos]['ref'])
                                             #print('--')
                                             for alts in chromosome_variants['variants'][pos]['alts']:
                                                 for alt in alts:
                                                     alt = str(alt)
-                                                    alt_seq = seq[:relative_pos] + + seq[relative_pos + 1:]
+                                                    #alt_seq = seq[:relative_pos] + + seq[relative_pos + 1:]
                                                     #seq_ref = seq[::-1]
-                                                    #seq_ref = seq[relative_pos]
-                                                    
-                                            # print(f'r:{ref}')
-                                            # print(f's:{seq_ref}')
-                                            #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
+                                                    seq_ref = seq[relative_pos]
+                                                    #print(get_alt_codon(seq, relative_pos, alt))
+                                                    lowest_pos = 999999999
+                                                    if ref != seq_ref:
+                                                        if lowest_pos > pos:
+                                                            lowest_pos = pos
+                                                            print('----')
+                                                            print(f'r:{ref}')
+                                                            print(f's:{seq_ref}')
+                                                            print(get_alt_codon(seq, relative_pos, alt))
+                                                            print(gene.chrom)
+                                                            print(gene.strand)
+                                                            print(seq[relative_pos-20:relative_pos+20])
+                                                            print(pos)
+                                                    #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
                                     #print(relative_pos)
                                     #print(prot_seq1)
+                    chrom_gene_start = gene.start #- chrom_start
+                    chrom_gene_end = gene.end #- chrom_start
                             #print(len(seq)/3)
 
                     # for pos in chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]:
@@ -235,11 +270,9 @@ if __name__ == '__main__':
     #handler = logging.StreamHandler()
     #handler.setFormatter(logging.Formatter('%(levelname)s - %(asctime)s - %(message)s'))
     #logger.addHandler(handler)
-    
-    chrom_pos_dict = get_chromosome_pos_dict(chromosome_filepath)
-    #print(chrom_pos_dict)
+
 
     variants_chromosome_dict = get_variants(vcf_filename, logger)
     db = get_feature_db(gff_filename)
-    sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genome_fasta, results_filename)
+    sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename)
     print('a')
