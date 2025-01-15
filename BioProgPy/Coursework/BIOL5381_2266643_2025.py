@@ -197,13 +197,10 @@ def sort_variants_by_feature(variants_chromosome_dict, chrom_pos_dict, db, genom
                                             for alts in chromosome_variants['variants'][pos]['alts']:
                                                 for alt in alts:
                                                     alt = str(alt)
-                                                    
+                                                    alt_seq = seq[:relative_pos] + + seq[relative_pos + 1:]
                                                     #seq_ref = seq[::-1]
-                                                    seq_ref = seq[relative_pos]
-                                                    for i in range(len(seq_ref)):
-                                                        if ref == seq_ref[i]:
-                                                            #print(i)
-                                                            pass
+                                                    #seq_ref = seq[relative_pos]
+                                                    
                                             # print(f'r:{ref}')
                                             # print(f's:{seq_ref}')
                                             #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
