@@ -178,6 +178,13 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             #for i in range(10):
             count = 0
             cds_count = 0
+            pcds_match = 0
+            pcds_mismatch = 0
+            mcds_match = 0
+            mcds_mismatch = 0
+            cds_mismatch_minus_one = 0
+            cds_match_minus_one = 0
+
             for gene in genes:
                 count += 1
                 if gene.chrom in variants_chromosome_dict: 
@@ -202,14 +209,14 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                         cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
                         del found_variants[lower_bound_non_syn:upper_bound_non_syn]
 
-                        if count < 100000000000000000: #40000:
+                        if count < 1500000000: #40000:
                             # print('---')
                             if len(cds_variants) > 0:
-                                #cds_count += 1
+                                cds_count += 1
                                 seq = cds.sequence(genome_fasta,use_strand=True)
 
                                 for mRNA in db.parents(cds.id,featuretype='mRNA'):
-                                    if mRNA.strand == '+':
+                                    if mRNA.strand == '+' or '-':
                                         seq_adj, pos_adjust = get_adjusted_cds(mRNA, seq, cds)
                                         
                                         #prot_seq1 = Seq(seq).translate()
@@ -226,16 +233,38 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                                                     #print(get_alt_codon(seq, relative_pos, alt))
                                                     lowest_pos = 999999999
                                                     if ref != seq_ref:
+                                                        if mRNA.strand == '+':
+                                                            pcds_mismatch += 1
+                                                        else:
+                                                            mcds_mismatch += 1
+                                                        seq_ref = seq[relative_pos-1]
+                                                        if ref == seq_ref:
+                                                            cds_mismatch_minus_one += 1
+                                                        else:
+                                                            pass
+                                                            #print()
+
                                                         if lowest_pos > pos:
                                                             lowest_pos = pos
-                                                            print('----')
-                                                            print(f'r:{ref}')
-                                                            print(f's:{seq_ref}')
-                                                            print(get_alt_codon(seq, relative_pos, alt))
-                                                            print(gene.chrom)
-                                                            print(gene.strand)
-                                                            print(seq[relative_pos-20:relative_pos+20])
-                                                            print(pos)
+                                                            
+                                                            # print('----')
+                                                            # print(f'r:{ref}')
+                                                            # print(f's:{seq_ref}')
+                                                            # print(get_alt_codon(seq, relative_pos, alt))
+                                                            # print(gene.chrom)
+                                                            # print(gene.strand)
+                                                            #print(seq[relative_pos-5:relative_pos+5])
+                                                            # print(pos)
+                                                    else:
+                                                        if mRNA.strand == '+':
+                                                            pcds_match += 1
+                                                        else:
+                                                            mcds_match += 1
+                                                        seq_ref = seq[relative_pos-1]
+                                                        if ref == seq_ref:
+                                                            cds_match_minus_one += 1
+                                                        pass
+                                                        #print(gene.chrom)
                                                     #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
                                     #print(relative_pos)
                                     #print(prot_seq1)
@@ -248,6 +277,13 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                     #         results_writer.writerow([str(pos),str(gene.chrom)])
 
             print(count)
+            print('###')
+            print(f'+matches: {pcds_match}')
+            print(f'+mismatches: {pcds_mismatch}')
+            print(f'-matches: {mcds_match}')
+            print(f'-mismatches: {mcds_mismatch}')
+            print(f'mismatch minus one: {cds_mismatch_minus_one}')
+            print(f'match-1:{cds_match_minus_one}')
     except Exception as err:
         logger.error(f'Error generating results: {err}; {traceback.format_exc}')
         exc_info = sys.exc_info()
