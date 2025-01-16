@@ -4,6 +4,7 @@ import csv
 import bisect
 import traceback
 import sys
+import math
 
 from os.path import isfile
 
@@ -15,6 +16,8 @@ COMP_DICT = {'A': 'T',
              'T': 'A',
              'G': 'C',
              'C': 'G'}
+
+variant_results_headers = ['CHROM','POS','REF','ALT','Type','Transcript','Protein Location','Ref AA','Alt AA']
 
 # Loops through variants in vcf file
 # Returns a dict of all variants which meet the minimum quatity threshold for each chromosome, and a sorted list of their positions which are used as keys
@@ -66,7 +69,6 @@ def get_variants(vcf_filename, logger, min_quality = 20):
         logger.error(f'Error loading variants file: {err}')
         return None
 
-
 # Create feature db, or connect to it if it already exists
 def get_feature_db(gff_filename):
     try:
@@ -90,13 +92,7 @@ def get_feature_db(gff_filename):
         return None
 
 def find_variants_for_feature(start, end, pos_list):
-    # print('Gene:')
-    # print(gene_start)
-    # print(gene_end)
-    # print('--')
-    
     assert start <= end
-    
 
     lower_bound_variants = bisect.bisect_left(pos_list, start)
     upper_bound_variants = bisect.bisect_right(pos_list, end, lo=lower_bound_variants)
@@ -151,17 +147,78 @@ def get_adjusted_cds(mRNA, seq, cds):
 
     mod_3_pre_seq = len(seq_segments[0]) % 3
 
-    if mod_3_pre_seq > 0:
-        remainder_pre_seq = seq_segments[0][-mod_3_pre_seq:] 
-    else:
-        remainder_pre_seq = ''
+    # if mod_3_pre_seq > 0:
+    #     remainder_pre_seq = seq_segments[0][-mod_3_pre_seq:] 
+    # else:
+    #     remainder_pre_seq = ''
+    remainder_pre_seq = seq_segments[0]
 
     seq_adj = remainder_pre_seq + seq
     seq_adj += seq_segments[1][:2]
+    seq_adj = seq_adj.upper()
+    # print(seq_segments[0])
+    # print(len(seq_segments[0]))
+    # print(mod_3_pre_seq)
+    # print(remainder_pre_seq)
+    #print(seq_adj)
     #print(f'rem:{remainder_pre_seq}')
-    pos_adjust = cds.start - len(remainder_pre_seq)
+
+    if mRNA.strand == '+':
+        pos_adjust = cds.start - len(remainder_pre_seq)
+    else:
+        pos_adjust = cds.start - 1
     
     return seq_adj, pos_adjust
+
+def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, found_variants, count, cds_count, cds_mismatch):
+    # Get any variants in this cds
+    lower_bound_non_syn, upper_bound_non_syn = find_variants_for_feature(cds.start, cds.end, found_variants)
+    cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
+
+    # remove those variants that match from the main list
+    del found_variants[lower_bound_non_syn:upper_bound_non_syn]
+
+    if count < 1500000: #40000:
+        # If there are variants on this cds they are written to results
+        if len(cds_variants) > 0:
+            cds_count += 1
+            seq = cds.sequence(genome_fasta,use_strand=True)
+
+            for mRNA in db.parents(cds.id,featuretype='mRNA'):
+                # Get an adjusted sequence including the preceding codons
+                seq_adj, pos_adjust = get_adjusted_cds(mRNA, seq, cds)
+                
+                #prot_seq1 = Seq(seq).translate()
+                for pos in cds_variants:
+                    relative_pos = pos - pos_adjust
+                    ref = str(chromosome_variants['variants'][pos]['ref']).upper()
+                    for alts in chromosome_variants['variants'][pos]['alts']:
+                        for alt in alts:
+                            # base at the position of the variant, to check that the reference matches
+                            seq_ref = seq_adj[relative_pos]
+                            
+                            if ref == seq_ref:
+                                alt = str(alt).upper()
+                                
+                                if mRNA.strand == '+':
+                                    codons = get_alt_codon(seq_adj, relative_pos, alt)
+                                else:
+                                    comp_alt = COMP_DICT[alt]
+                                    codons = get_alt_codon(seq_adj, -relative_pos, comp_alt)
+                                    relative_pos = len(seq_adj) - relative_pos + 1
+
+                                protein_loc = math.ceil(relative_pos / 3)
+                                
+                                ref_prot_seq = str(Seq(codons[0]).translate())
+                                alt_prot_seq = str(Seq(codons[1]).translate())
+                                
+                                results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Non-synonymous',mRNA.id,protein_loc,ref_prot_seq,alt_prot_seq])
+                                    
+                            else:
+                                # The reference does not match, skip and make note for later
+                                cds_mismatch += 1
+                                pass
+    return results_writer, cds_count, cds_mismatch, count
 
 def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename):
     try:
@@ -175,115 +232,42 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
         genes = db.all_features(featuretype='protein_coding_gene')
         with open(results_filename,'w',newline="") as results_tsv:
             results_writer = csv.writer(results_tsv, delimiter='\t')
+            results_writer.writerow(variant_results_headers)
+
             #for i in range(10):
             count = 0
             cds_count = 0
-            pcds_match = 0
-            pcds_mismatch = 0
-            mcds_match = 0
-            mcds_mismatch = 0
-            cds_mismatch_minus_one = 0
-            cds_match_minus_one = 0
+            cds_mismatch = 0
 
             for gene in genes:
                 count += 1
                 if gene.chrom in variants_chromosome_dict: 
-                    # if count < 10:
-                    #     print(gene.strand)  
                     chromosome_variants = variants_chromosome_dict[gene.chrom]
-                    #gene_len = gene.end - gene.start
 
+                    # Search for variants on corresponding chromosome 
                     lower_bound_variants, upper_bound_variants = find_variants_for_feature(gene.start, gene.end, chromosome_variants['sorted_pos_keys'])
                     found_variants = chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]
+                    # Make note of variants that have been found so we know by the end which varaints do not appear on any genes
                     for pos in found_variants:
                         chromosome_variants['found_pos'].append(pos)
 
+                    # Search the coding regions of this gene
                     for cds in db.children(gene.id, featuretype='CDS'):
-                        cds_start = cds.start #- chrom_start
-                        cds_end = cds.end #- chrom_start
-                        try:
-                            lower_bound_non_syn, upper_bound_non_syn = find_variants_for_feature(cds_start, cds_end, found_variants)
-                        except:
-                            print(f'{cds.start}:{cds.end}')
-
-                        cds_variants = found_variants[lower_bound_non_syn:upper_bound_non_syn]
-                        del found_variants[lower_bound_non_syn:upper_bound_non_syn]
-
-                        if count < 1500000000: #40000:
-                            # print('---')
-                            if len(cds_variants) > 0:
-                                cds_count += 1
-                                seq = cds.sequence(genome_fasta,use_strand=True)
-
-                                for mRNA in db.parents(cds.id,featuretype='mRNA'):
-                                    if mRNA.strand == '+' or '-':
-                                        seq_adj, pos_adjust = get_adjusted_cds(mRNA, seq, cds)
-                                        
-                                        #prot_seq1 = Seq(seq).translate()
-                                        for pos in cds_variants:
-                                            relative_pos = pos - pos_adjust
-                                            ref = str(chromosome_variants['variants'][pos]['ref'])
-                                            #print('--')
-                                            for alts in chromosome_variants['variants'][pos]['alts']:
-                                                for alt in alts:
-                                                    alt = str(alt)
-                                                    #alt_seq = seq[:relative_pos] + + seq[relative_pos + 1:]
-                                                    #seq_ref = seq[::-1]
-                                                    seq_ref = seq[relative_pos]
-                                                    #print(get_alt_codon(seq, relative_pos, alt))
-                                                    lowest_pos = 999999999
-                                                    if ref != seq_ref:
-                                                        if mRNA.strand == '+':
-                                                            pcds_mismatch += 1
-                                                        else:
-                                                            mcds_mismatch += 1
-                                                        seq_ref = seq[relative_pos-1]
-                                                        if ref == seq_ref:
-                                                            cds_mismatch_minus_one += 1
-                                                        else:
-                                                            pass
-                                                            #print()
-
-                                                        if lowest_pos > pos:
-                                                            lowest_pos = pos
-                                                            
-                                                            # print('----')
-                                                            # print(f'r:{ref}')
-                                                            # print(f's:{seq_ref}')
-                                                            # print(get_alt_codon(seq, relative_pos, alt))
-                                                            # print(gene.chrom)
-                                                            # print(gene.strand)
-                                                            #print(seq[relative_pos-5:relative_pos+5])
-                                                            # print(pos)
-                                                    else:
-                                                        if mRNA.strand == '+':
-                                                            pcds_match += 1
-                                                        else:
-                                                            mcds_match += 1
-                                                        seq_ref = seq[relative_pos-1]
-                                                        if ref == seq_ref:
-                                                            cds_match_minus_one += 1
-                                                        pass
-                                                        #print(gene.chrom)
-                                                    #alt_seq = seq[:pos] + al-2:relative_pos+2t + s[pos + 1:]
-                                    #print(relative_pos)
-                                    #print(prot_seq1)
-                    chrom_gene_start = gene.start #- chrom_start
-                    chrom_gene_end = gene.end #- chrom_start
-                            #print(len(seq)/3)
-
+                        results_writer, cds_count, cds_mismatch, count = write_coding_variants(db, cds, gene, chromosome_variants, results_writer, found_variants, count, cds_count, cds_mismatch)
+                        
+                                                    
+                    
+                    #for 
                     # for pos in chromosome_variants['sorted_pos_keys'][lower_bound_variants:upper_bound_variants]:
                     #     if len(str(pos)) > 1:
                     #         results_writer.writerow([str(pos),str(gene.chrom)])
 
             print(count)
             print('###')
-            print(f'+matches: {pcds_match}')
-            print(f'+mismatches: {pcds_mismatch}')
-            print(f'-matches: {mcds_match}')
-            print(f'-mismatches: {mcds_mismatch}')
-            print(f'mismatch minus one: {cds_mismatch_minus_one}')
-            print(f'match-1:{cds_match_minus_one}')
+            logger.info(f'{cds_count} variant(s) found in coding regions')
+            if cds_mismatch > 0:
+                logger.error(f'{cds_mismatch} variant(s) have non-matching reference to refernence coding regions and were excluded')
+           
     except Exception as err:
         logger.error(f'Error generating results: {err}; {traceback.format_exc}')
         exc_info = sys.exc_info()
@@ -292,8 +276,8 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
 
 
 if __name__ == '__main__':
-    #vcf_filename = './data/Toy_Data/testData.vcf'
-    vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
+    vcf_filename = './data/Toy_Data/testData.vcf'
+    #vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
     gff_filename = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7.gff'
     genome_fasta = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta'
     results_filename = './results.tsv'
@@ -309,6 +293,7 @@ if __name__ == '__main__':
 
 
     variants_chromosome_dict = get_variants(vcf_filename, logger)
+    #print(variants_chromosome_dict)
     db = get_feature_db(gff_filename)
     sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename)
     print('a')
