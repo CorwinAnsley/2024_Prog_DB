@@ -227,31 +227,28 @@ def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, fo
                                     codons = get_alt_codon(seq_adj, relative_pos, alt)
                                 else:
                                     comp_alt = COMP_DICT[alt]
-                                    codons = get_alt_codon(seq_adj, -relative_pos, comp_alt)
-                                    relative_pos = len(seq_adj) - relative_pos + 1
+                                    codons = get_alt_codon(seq_adj, relative_pos, comp_alt)
+                                    relative_pos += 1
+                                    #relative_pos = len(seq_adj) - relative_pos + 1
 
                                 protein_loc = math.ceil(relative_pos / 3)
                                 
                                 ref_prot_seq = str(Seq(codons[0]).translate())
                                 alt_prot_seq = str(Seq(codons[1]).translate())
-                                
                                 results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Non-synonymous',mRNA.id,protein_loc,ref_prot_seq,alt_prot_seq])
                                     
                             else:
                                 # The reference does not match, skip and make note for later
                                 cds_mismatch += 1
-                                print(f'pos:{pos}')
-                                print(f'start:{cds.start}')
-                                print(f'end:{cds.end}')
-                                print(f'rel_pos:{relative_pos}')
-                                print(f'c_len:{len(seq_adj)}')
-                                #print(seq)
-                                #seq = cds.sequence(genome_fasta,use_strand=False)
-                                #print(seq)
-                                #print(seq_adj)
-
-                                
-                                print(mRNA.strand)
+                                # print(f'pos:{pos}')print(f'pos:{pos}')
+                                # print(f'start:{cds.start}')
+                                # print(f'end:{cds.end}')
+                                # print(f'rel_pos:{relative_pos}')
+                                # print(f'c_len:{len(seq_adj)}')
+                                # print(f'start:{cds.start}')
+                                # print(f'end:{cds.end}')
+                                # print(f'rel_pos:{relative_pos}')
+                                # print(f'c_len:{len(seq_adj)}')
                                 pass
     return results_writer, cds_count, cds_mismatch, count, found_variants
 
@@ -291,13 +288,18 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                         results_writer, cds_count, cds_mismatch, count, found_variants = write_coding_variants(db, cds, gene, chromosome_variants, results_writer, found_variants, count, cds_count, cds_mismatch)
                     
                     for pos in found_variants:
-                        if count < 15:
-                            print(gene.attribute)
                         ref = str(chromosome_variants['variants'][pos]['ref']).upper()
+                        seq = gene.sequence(genome_fasta,use_strand = True)
+                        if count < 50:
+                            #print('bb')
+                            #print(gene.attributes)
+                            seq
+                            prot_seq = str(Seq(seq).translate())
+                        
+
                         for alts in chromosome_variants['variants'][pos]['alts']:
                             for alt in alts:
                                 alt = str(alt).upper()
-
                                 results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Synonymous','NA','NA','NA','NA'])
                     
             for chrom in variants_chromosome_dict:
@@ -334,8 +336,8 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
 
 
 if __name__ == '__main__':
-    vcf_filename = './data/Toy_Data/testData.vcf'
-    #vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
+    #vcf_filename = './data/Toy_Data/testData.vcf'
+    vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
     gff_filename = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7.gff'
     genome_fasta = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta'
     results_filename = './results.tsv'
