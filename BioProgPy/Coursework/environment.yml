@@ -9,3 +9,4 @@ dependencies:
   - pyvcf3
   - gffutils
   - biopython
+  - seaborn
