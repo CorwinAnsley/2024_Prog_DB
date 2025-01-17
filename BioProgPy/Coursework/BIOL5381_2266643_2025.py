@@ -11,6 +11,7 @@ from os.path import isfile
 import vcf
 import gffutils as gff
 from Bio.Seq import Seq
+from pyfaidx import Fasta
 
 COMP_DICT = {'A': 'T',
              'T': 'A',
@@ -270,7 +271,7 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             count = 0
             cds_count = 0
             cds_mismatch = 0
-
+            genome_seq = Fasta(genome_fasta)
             for gene in genes:
                 count += 1
                 if gene.chrom in variants_chromosome_dict: 
@@ -287,20 +288,38 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                     for cds in db.children(gene.id, featuretype='CDS'):
                         results_writer, cds_count, cds_mismatch, count, found_variants = write_coding_variants(db, cds, gene, chromosome_variants, results_writer, found_variants, count, cds_count, cds_mismatch)
                     
+                    
                     for pos in found_variants:
                         ref = str(chromosome_variants['variants'][pos]['ref']).upper()
                         seq = gene.sequence(genome_fasta,use_strand = True)
                         if count < 50:
                             #print('bb')
                             #print(gene.attributes)
-                            seq
-                            prot_seq = str(Seq(seq).translate())
+                            gene_len = gene.end - gene.start
+                            mod_3_gene_len = gene_len % 3
+                            num_to_append = 3 - mod_3_gene_len
+                            relative_pos = pos - gene.start
+                            if gene.strand == '-':
+                                relative_pos = -relative_pos
+                            
+                            
+                            seq = genome_seq[gene.chrom][gene.start:gene.end+num_to_append].seq
+                            codon, alt_codon = get_alt_codon(seq, relative_pos, 'N')
+
+                            # if gene.strand == '-':
+                            #     codon = str(Seq(codon)reverse_complement)
+
+                            ref_codon = str(Seq(codon).translate())
+
+                            
+
+                            print(ref_codon)
                         
 
                         for alts in chromosome_variants['variants'][pos]['alts']:
                             for alt in alts:
                                 alt = str(alt).upper()
-                                results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Synonymous','NA','NA','NA','NA'])
+                                results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Synonymous','NA','NA',ref_codon,'NA'])
                     
             for chrom in variants_chromosome_dict:
                 cnt = 0
@@ -355,5 +374,6 @@ if __name__ == '__main__':
     variants_chromosome_dict = get_variants(vcf_filename, logger)
     #print(variants_chromosome_dict)
     db = get_feature_db(gff_filename)
+
     sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename)
     print('a')
