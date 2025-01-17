@@ -130,17 +130,22 @@ def get_alt_codon(seq, pos, alt):
 # Eg. If the region starts mid codon include the bases to make up that codon from the previous coding region
 def get_adjusted_cds(mRNA, seq, cds):
     #print('a')
+
+    if mRNA == '+':
+        mRNA_order_by = 'start'
+    else:
+        mRNA_order_by = 'end'
     
     seq_segments = ['','']
     pre_seq = True
-    for cds_child in db.children(mRNA.id, featuretype='CDS', order_by='start'):
+    for cds_child in db.children(mRNA.id, featuretype='CDS', order_by=mRNA_order_by):
         if cds_child.id == cds.id:
             pre_seq = False
         else:
             if pre_seq:
                 seq_segments[0] += cds_child.sequence(genome_fasta,use_strand=True)
             else:
-                if len(seq_segments) > 2:
+                if len(seq_segments[1]) > 2:
                     break
                 else:
                     seq_segments[1] += cds_child.sequence(genome_fasta,use_strand=True)
@@ -151,11 +156,17 @@ def get_adjusted_cds(mRNA, seq, cds):
     #     remainder_pre_seq = seq_segments[0][-mod_3_pre_seq:] 
     # else:
     #     remainder_pre_seq = ''
+    
     remainder_pre_seq = seq_segments[0]
 
+    # print('---')
+    # print(len(remainder_pre_seq))
+    # print(len(seq_segments[1][:2]))
     seq_adj = remainder_pre_seq + seq
     seq_adj += seq_segments[1][:2]
     seq_adj = seq_adj.upper()
+    
+    
     # print(seq_segments[0])
     # print(len(seq_segments[0]))
     # print(mod_3_pre_seq)
@@ -164,9 +175,14 @@ def get_adjusted_cds(mRNA, seq, cds):
     #print(f'rem:{remainder_pre_seq}')
 
     if mRNA.strand == '+':
+        
         pos_adjust = cds.start - len(remainder_pre_seq)
     else:
-        pos_adjust = cds.start - 1
+        # seq_adj = seq_segments[0] + seq_segments
+        # seq_adj += seq_segments[1][:2]
+        # seq_adj = seq_adj.upper()
+        
+        pos_adjust = cds.start - 1 - len(seq_segments[1][:2])
     
     return seq_adj, pos_adjust
 
@@ -198,9 +214,9 @@ def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, fo
                             seq_ref = seq_adj[relative_pos]
 
                             if mRNA.strand == '-':
-                                relative_pos = len(seq_adj) - relative_pos + 2
+                                relative_pos = len(seq_adj) - relative_pos #+ 2
                                 seq_ref = seq_adj[relative_pos]
-                                #seq_ref = COMP_DICT[ref]
+                                seq_ref = COMP_DICT[seq_ref]
                                 #print(ref)
                                 #print(seq_adj[-relative_pos-5:-relative_pos+5])
                             
@@ -229,6 +245,11 @@ def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, fo
                                 print(f'end:{cds.end}')
                                 print(f'rel_pos:{relative_pos}')
                                 print(f'c_len:{len(seq_adj)}')
+                                #print(seq)
+                                #seq = cds.sequence(genome_fasta,use_strand=False)
+                                #print(seq)
+                                #print(seq_adj)
+
                                 
                                 print(mRNA.strand)
                                 pass
@@ -278,7 +299,6 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                                 alt = str(alt).upper()
 
                                 results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Synonymous','NA','NA','NA','NA'])
-                                                    
                     
             for chrom in variants_chromosome_dict:
                 cnt = 0
@@ -314,8 +334,8 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
 
 
 if __name__ == '__main__':
-    #vcf_filename = './data/Toy_Data/testData.vcf'
-    vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
+    vcf_filename = './data/Toy_Data/testData.vcf'
+    #vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
     gff_filename = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7.gff'
     genome_fasta = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta'
     results_filename = './results.tsv'
