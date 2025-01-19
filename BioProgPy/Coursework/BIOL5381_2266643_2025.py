@@ -43,6 +43,7 @@ def get_variants(vcf_filename, logger, min_quality = 20):
                 q_count += 1
                 if record.CHROM in variants_chromosome_dict:
                     if int(record.POS) in variants_chromosome_dict[record.CHROM]['variants']:
+                        print('eh')
                         variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)]['alts'].append(record.ALT)
                     else:
                         variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)] = {'ref':record.REF, 'alts':[record.ALT]}
@@ -199,13 +200,14 @@ def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, fo
     for pos in cds_variants:
         chromosome_variants['found_pos'].append(pos)
 
-    if count < 1500000000000000: #40000:
+    if count < 150000000000000000000: #40000:
         # If there are variants on this cds they are written to results
         if len(cds_variants) > 0:
             cds_count += 1
             seq = cds.sequence(genome_fasta,use_strand=True)
-
+            mRNAs = 0
             for mRNA in db.parents(cds.id,featuretype='mRNA'):
+                mRNAs += 1
                 # Get an adjusted sequence including the preceding codons
                 seq_adj, pos_adjust = get_adjusted_cds(mRNA, seq, cds)
                 
@@ -260,6 +262,10 @@ def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, fo
                                 # print(f'rel_pos:{relative_pos}')
                                 # print(f'c_len:{len(seq_adj)}')
                                 pass
+            if mRNAs == 0:
+                print('###')
+                for parent in db.parents(cds.id):
+                    print(parent.featuretype)
     return results_writer, cds_count, cds_mismatch, count, syn_v, nonsyn_v
 
 def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename):
@@ -282,8 +288,10 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             syn_v = 0
             nonsyn_v = 0
             cds_mismatch = 0
+            non_coding = 0
             genome_seq = Fasta(genome_fasta)
             for gene in genes:
+                count += 1
                 if gene.chrom in variants_chromosome_dict: 
                     chromosome_variants = variants_chromosome_dict[gene.chrom]
 
@@ -328,6 +336,7 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                                 #results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Synonymous',gene.id,'NA',ref_codon,'NA'])
                     
             for chrom in variants_chromosome_dict:
+                print(chrom)
                 cnt = 0
                 for found_variant in variants_chromosome_dict[chrom]['found_pos']:
                     if cnt < 2:
@@ -339,12 +348,25 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                         if variants_chromosome_dict[chrom]['sorted_pos_keys'][found_variant_pos-1] == found_variant:
                             del variants_chromosome_dict[chrom]['sorted_pos_keys'][found_variant_pos-1]
                 
+                highest = 0
+                # if chrom == 'Pf3D7_02_v3':
+                #     print(variants_chromosome_dict[chrom]['sorted_pos_keys'])
+
                 for pos in variants_chromosome_dict[chrom]['sorted_pos_keys']:
+                    if pos > highest:
+                        highest = pos
+                    else:
+                        print(pos)
                     ref = str(variants_chromosome_dict[chrom]['variants'][pos]['ref']).upper()
+                    if len(variants_chromosome_dict[chrom]['variants'][pos]['alts']) > 2:
+                        print(pos)
                     for alts in variants_chromosome_dict[chrom]['variants'][pos]['alts']:
+                            if len(alts) > 2:
+                                print(pos)
                             for alt in alts:
                                 alt = str(alt).upper()
-                                results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Non-Coding','NA','NA','NA','NA'])
+                                non_coding += 1
+                                results_writer.writerow([str(chrom),str(pos),ref,alt,'Non-Coding','NA','NA','NA','NA'])
 
 
 
@@ -353,6 +375,9 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             logger.info(f'{cds_count} variant(s) found in coding regions')
             logger.info(f'{syn_v} synonymous variant(s)')
             logger.info(f'{nonsyn_v} non-synonymous variant(s)')
+            logger.info(f'{non_coding} non-coding variant(s)')
+            total = syn_v + nonsyn_v + non_coding
+            logger.info(f'{total} total variants')
             if cds_mismatch > 0:
                 logger.error(f'{cds_mismatch} variant(s) have non-matching reference to refernence coding regions and were excluded')
            
@@ -361,6 +386,17 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
         exc_info = sys.exc_info()
         traceback.print_exception(*exc_info)
         return None
+
+def check_results(results_filename):
+    with open(results_filename,'r') as results_file:
+        results_reader = csv.reader(results_file,delimiter='\t')
+        pos_list = []
+        for result in results_reader:
+            pos = f'{result[0]}: {result[1]}'
+            if pos in pos_list:
+                print(pos)
+            else:
+                pos_list.append(pos)
 
 
 if __name__ == '__main__':
@@ -381,8 +417,23 @@ if __name__ == '__main__':
 
 
     variants_chromosome_dict = get_variants(vcf_filename, logger)
+    total_variants = 0
+    for chrom in variants_chromosome_dict:
+        #print(chrom)
+        total_variants += len(variants_chromosome_dict[chrom]['sorted_pos_keys'])
+        highest = 0
+        for pos in variants_chromosome_dict[chrom]['sorted_pos_keys']:
+            if pos > highest:
+                highest = pos
+            else:
+                print(pos)
+        #print(variants_chromosome_dict[chrom]['sorted_pos_keys'])
+
+    #print(total_variants)
+
     #print(variants_chromosome_dict)
     db = get_feature_db(gff_filename)
 
     sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename)
+    check_results(results_filename)
     print('a')
