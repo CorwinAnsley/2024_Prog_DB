@@ -5,13 +5,14 @@ import bisect
 import traceback
 import sys
 import math
-
 from os.path import isfile
 
 import vcf
 import gffutils as gff
 from Bio.Seq import Seq
 from pyfaidx import Fasta
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 # Constants
 COMP_DICT = {'A': 'T',
@@ -36,7 +37,6 @@ TEST_SEQ = 'AAATTTGGG'
 # Multiple variations can be stored with the same position
 def get_variants(vcf_filename, logger, min_quality = 20):
     try:
-        print(vcf_filename)
         if not isfile(vcf_filename):
             raise Exception('file does not exist')
         
@@ -260,7 +260,7 @@ def create_variants_report(variants_chromosome_dict, db, genome_fasta, results_f
         
         if not overwrite:
             if isfile(results_filename):
-                raise Exception('Output file already exists. Use -o to overwrite')
+                raise Exception('Output file already exists. Use --overwrite to overwrite')
         
         # Get a generator for all the genes
         genes = db.all_features(featuretype='protein_coding_gene')
@@ -323,36 +323,15 @@ def create_variants_report(variants_chromosome_dict, db, genome_fasta, results_f
             return syn_v, nonsyn_v
            
     except Exception as err:
-        logger.error(f'Error generating results: {err}; {traceback.format_exc}')
-        exc_info = sys.exc_info()
-        traceback.print_exception(*exc_info)
+        logger.error(f'Error generating results: {err};')
         return None
 
-def test_create_variants_report(variants_chromosome_dict, db, genome_fasta):
-    try:
-        count_results = create_variants_report(variants_chromosome_dict,db,genome_fasta,TEST_OUTPUT_FILENAME,overwrite=True)
-        with open( TEST_OUTPUT_FILENAME,'r') as results_file:
-            results_reader = csv.reader(results_file,delimiter='\t')
-            assert next(results_reader) == RESULT_HEADERS
-            assert next(results_reader) == ['Pf3D7_10_v3', '1468717', 'C', 'A', 'Non-synonymous', 'PF3D7_1037000.1', '1948', 'T', 'N']
-        assert count_results == (0, 2)
-        return True
-    except Exception as err:
-        logger.error(f'Error occurred testing create_variants_report: {err}')
-        return False
-
-
-def check_results(results_filename):
-    with open(results_filename,'r') as results_file:
-        results_reader = csv.reader(results_file,delimiter='\t')
-        pos_list = []
-        for result in results_reader:
-            pos = f'{result[0]}: {result[1]}'
-            if pos in pos_list:
-                if result[4] == 'Non-Coding':
-                    print(pos)
-            else:
-                pos_list.append(pos)
+def create_variants_plot(plot_filename, non_q_count, syn_v, nonsyn_v):
+    #x_axis = ['Q <= 20','Synonymous','Non-synonymous']
+    data = {'Q <= 20': non_q_count, 'Synonymous': syn_v, 'Non-synonymous':nonsyn_v}
+    sns.barplot(data)
+    plt.savefig(plot_filename)
+    plt.clf()
 
 #### TESTING FUNCTIONS ###
 
@@ -393,6 +372,19 @@ def test_get_alt_codon(logger):
         logger.error(f'Error occurred testing get_alt_codon: {err}')
         return False
 
+def test_create_variants_report(variants_chromosome_dict, db, genome_fasta):
+    try:
+        count_results = create_variants_report(variants_chromosome_dict,db,genome_fasta,TEST_OUTPUT_FILENAME,overwrite=True)
+        with open( TEST_OUTPUT_FILENAME,'r') as results_file:
+            results_reader = csv.reader(results_file,delimiter='\t')
+            assert next(results_reader) == RESULT_HEADERS
+            assert next(results_reader) == ['Pf3D7_10_v3', '1468717', 'C', 'A', 'Non-synonymous', 'PF3D7_1037000.1', '1948', 'T', 'N']
+        assert count_results == (0, 2)
+        return True
+    except Exception as err:
+        logger.error(f'Error occurred testing create_variants_report: {err}')
+        return False
+
 # Run all tests
 def run_tests(test_dir,logger):
     vcf_filename = test_dir + r"/Toy Data/testData.vcf"
@@ -414,24 +406,40 @@ def run_tests(test_dir,logger):
         raise Exception('One or more tests failed, see log for details')
 
 if __name__ == '__main__':
-    vcf_filename = './data/Toy_Data/testData.vcf'
-    #vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
-    gff_filename = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7.gff'
-    genome_fasta = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta'
-    results_filename = './results.tsv'
-    test_dir = r"./Data For Assessment"
-    
+    parser = argparse.ArgumentParser(prog='Variant Parser', description='')
+    parser.add_argument('--overwrite',help='overwrites output',action='store_true')
+    parser.add_argument('--vcf',type=str,help='Filepath to vcf file',default=None)
+    parser.add_argument('--gff',type=str,help='Filepath to gff file',default=None)
+    parser.add_argument('--fasta',type=str,help='Filepath to genome fasta file',default=None)
+    parser.add_argument('--output',type=str,help='Filepath to output to',default=None)
+    parser.add_argument('--testdir',type=str,help='Filepath to test files, if tests are to be run',default='')
+    parser.add_argument('--plotdir',type=str,help='Filepath to write plot to',default=None)
+
+    args = parser.parse_args()
+    vcf_filename = str(args.vcf)
+    gff_filename = str(args.gff)
+    genome_fasta = str(args.fasta) 
+    results_filename = str(args.output)
+    test_dir = str(args.testdir)
+    plot_filename = str(args.plotdir)  
 
     logger = logging.getLogger()
     logging.basicConfig(filename='log.txt', encoding='utf-8', filemode="w", format='%(levelname)s - %(asctime)s - %(message)s', level=logging.INFO)
 
-    run_tests(test_dir,logger)
-
-    #variants_chromosome_dict, q_count, non_q_count = get_variants(vcf_filename, logger)
- 
-   
-    #db = get_feature_db(gff_filename)
-
-    #create_variants_report(variants_chromosome_dict, db, genome_fasta, results_filename)
-    #check_results(results_filename)
+    if test_dir == '':
+        variants_chromosome_dict, q_count, non_q_count = get_variants(vcf_filename, logger)
+        #print(variants_chromosome_dict)
+    
+    
+        db = get_feature_db(gff_filename)
+        
+        if variants_chromosome_dict != None:
+            if db != None:
+                counts = create_variants_report(variants_chromosome_dict, db, genome_fasta, results_filename)
+                if counts != None:
+                    syn_v, nonsyn_v = counts
+                    if plot_filename != None:
+                        create_variants_plot(plot_filename, non_q_count, syn_v, nonsyn_v)
+    else:
+        run_tests(test_dir,logger)
   
