@@ -159,64 +159,60 @@ def get_alt_codon(seq, pos, alt):
     return codon, alt_codon
 
 # Returns a sequence generated from a coding region, with a buffer either side to line up with codons
-# Eg. If the region starts mid codon include the bases to make up that codon from the previous coding region
+# This allows us to calculate the position the variant takes on the protein later
 def get_adjusted_cds(mRNA, seq, cds):
     #print('a')
 
+    # For the negative strand we iterate backwards
     if mRNA == '+':
         mRNA_order_by = 'start'
     else:
         mRNA_order_by = 'end'
     
+    # here the sections preceding and following given cds will be saved
     seq_segments = ['','']
     pre_seq = True
+    # Iterate through cds children of mRNA to get sequence either side of given cds
     for cds_child in db.children(mRNA.id, featuretype='CDS', order_by=mRNA_order_by):
         if cds_child.id == cds.id:
             pre_seq = False
         else:
             if pre_seq:
+                # Add this section
                 seq_segments[0] += cds_child.sequence(genome_fasta,use_strand=True)
             else:
+                # We only need at most 2 bases from any following cds
                 if len(seq_segments[1]) > 2:
                     break
                 else:
                     seq_segments[1] += cds_child.sequence(genome_fasta,use_strand=True)
-
-    mod_3_pre_seq = len(seq_segments[0]) % 3
-
-    # if mod_3_pre_seq > 0:
-    #     remainder_pre_seq = seq_segments[0][-mod_3_pre_seq:] 
-    # else:
-    #     remainder_pre_seq = ''
     
     remainder_pre_seq = seq_segments[0]
-
-    # print('---')
-    # print(len(remainder_pre_seq))
-    # print(len(seq_segments[1][:2]))
+    
+    # assemble the adjusted sequence with the addition of adjacent sequence
     seq_adj = remainder_pre_seq + seq
     seq_adj += seq_segments[1][:2]
     seq_adj = seq_adj.upper()
-    
-    
-    # print(seq_segments[0])
-    # print(len(seq_segments[0]))
-    # print(mod_3_pre_seq)
-    # print(remainder_pre_seq)
-    #print(seq_adj)
-    #print(f'rem:{remainder_pre_seq}')
 
+    # Get a number that will be used to adjust the position we calculate codons from
     if mRNA.strand == '+':
-        
         pos_adjust = cds.start - len(remainder_pre_seq)
     else:
-        # seq_adj = seq_segments[0] + seq_segments
-        # seq_adj += seq_segments[1][:2]
-        # seq_adj = seq_adj.upper()
-        
         pos_adjust = cds.start - 1 - len(seq_segments[1][:2])
     
     return seq_adj, pos_adjust
+
+def test_get_adjusted_cds(genome_fasta):
+    try:
+        test_cds1 = gff.Feature(id = '01')
+        test_cds2 = gff.Feature(id = '02',start=1,end=5,chrom='Pf3D7_01_v3',featuretype='cds')
+        test_cds3 = gff.Feature(id = '03',start=6,end=12,chrom='Pf3D7_01_v3',featuretype='cds')
+        test_mRNA = gff.Feature(id='04',strand='-')
+        #print(test_cds1.id)
+        return True
+    except Exception as err:
+        logger.error(f'Error occurred testing get_adjusted_cds: {err}')
+        return False
 
 def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, found_variants, count, cds_count, cds_mismatch,syn_v,nonsyn_v):
     # Get any variants in this cds
@@ -482,6 +478,8 @@ def run_tests(logger):
 
     test_db = test_get_feature_db(gff_filename,logger)
     test_results.append(test_db)
+
+    test_results.append(test_get_adjusted_cds())
 
     if False in test_results:
         raise Exception('One or more tests failed, see log for details')
