@@ -13,12 +13,23 @@ import gffutils as gff
 from Bio.Seq import Seq
 from pyfaidx import Fasta
 
+# Constants
 COMP_DICT = {'A': 'T',
              'T': 'A',
              'G': 'C',
              'C': 'G'}
 
 variant_results_headers = ['CHROM','POS','REF','ALT','Type','Transcript','Protein Location','Ref AA','Alt AA']
+
+# Constants for test functions
+
+TEST_OUTPUT_FILENAME = '__TEMP_TEST_OUTPUT__.tsv'
+TEST_VARIANTS =[
+    ['Chrom1','10','.','A','T','123','.','.']
+    ]
+TEST_POS_LIST = [1,2,3,10,12,14]
+TEST_SEQ = 'AAATTTGGG'
+
 
 # Loops through variants in vcf file
 # Returns a dict of all variants which meet the minimum quatity threshold for each chromosome, and a sorted list of their positions which are used as keys
@@ -30,42 +41,60 @@ def get_variants(vcf_filename, logger, min_quality = 20):
             raise Exception('file does not exist')
         
         if not (vcf_filename.endswith('.vcf') or vcf_filename.endswith('.vcf.gz')):
-            raise Exception('Incorrect file format, should be .vcf file')
+            raise Exception('Incorrect file format, should be .vcf/.vcf.gz file')
         
         vcf_reader = vcf.Reader(filename=vcf_filename)
 
         q_count = 0
         non_q_count = 0
         variants_chromosome_dict = {}
+        record_errs = 0
 
         for record in vcf_reader:
-            if record.QUAL > min_quality:
-                q_count += 1
-                if record.CHROM in variants_chromosome_dict:
-                    if int(record.POS) in variants_chromosome_dict[record.CHROM]['variants']:
-                        print('eh')
-                        variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)]['alts'].append(record.ALT)
-                    else:
-                        variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)] = {'ref':record.REF, 'alts':[record.ALT]}
-                        bisect.insort_right(variants_chromosome_dict[record.CHROM]['sorted_pos_keys'], record.POS)
-                else:
-                    variants_chromosome_dict[record.CHROM] = {}
-                    variants_chromosome_dict[record.CHROM]['sorted_pos_keys'] = [int(record.POS)]
-                    variants_chromosome_dict[record.CHROM]['found_pos'] = []
-                    variants_chromosome_dict[record.CHROM]['variants'] = {}
-                    variants_chromosome_dict[record.CHROM]['variants'][int(record.POS)] = {'ref':record.REF, 'alts':[record.ALT]}
+            try:
+                if record.QUAL > min_quality:
+                    q_count += 1
 
-                # if q_count < 10:
-                #     print(record.ID)
-            else:
-                non_q_count += 1
-        
+                    # Make sure the relevant data is valid
+                    ref = str(record.REF).upper()
+                    alt =[]
+                    for i in range(len(record.ALT)):
+                        alt.append(str(record.ALT[i]).upper())
+                    # assert ref in COMP_DICT
+                    # assert alt in COMP_DICT
+                    chrom = str(record.CHROM)
+                    pos = int(record.POS)
+                    assert pos > 0
+
+                    # Add the variation to the dict
+                    if chrom in variants_chromosome_dict:
+                        if pos in variants_chromosome_dict[chrom]['variants']:
+                            variants_chromosome_dict[chrom]['variants'][pos]['alts'].append(alt)
+                        else:
+                            variants_chromosome_dict[chrom]['variants'][pos] = {'ref':ref, 'alts':[alt]}
+                            bisect.insort_right(variants_chromosome_dict[chrom]['sorted_pos_keys'], pos)
+                    else:
+                        variants_chromosome_dict[chrom] = {}
+                        variants_chromosome_dict[chrom]['sorted_pos_keys'] = [pos]
+                        variants_chromosome_dict[chrom]['found_pos'] = []
+                        variants_chromosome_dict[chrom]['variants'] = {}
+                        variants_chromosome_dict[chrom]['variants'][pos] = {'ref':ref, 'alts':[alt]}
+
+                # Keep a count of variations that don't meet the quality requirement
+                else:
+                    non_q_count += 1
+            except Exception as err:
+                print(err)
+                record_errs += 1
+
         # for chromosome in variants_chromosome_dict:
         #     # Later variants will be removed from this list as they are found in genes, leaving only the non-coding genes
         #     variants_chromosome_dict[chromosome]['non-coding_pos'] = variants_chromosome_dict[chromosome]['sorted_pos_keys']
 
-        logger.info(f'{non_q_count} variants with quality score below {min_quality}\n')
-        return variants_chromosome_dict
+        logger.info(f'{non_q_count} variant(s) with quality score below {min_quality}\n')
+        if record_errs > 0:
+            logger.error(f'{record_errs} variant(s) were unable to be read')
+        return variants_chromosome_dict, q_count, non_q_count
     
     except Exception as err:
         logger.error(f'Error loading variants file: {err}')
@@ -93,6 +122,8 @@ def get_feature_db(gff_filename):
         logger.error(f'Error loading gene file: {err}')
         return None
 
+# Helper function that returns upper and lower bound for a sorted list of variant positions that fall
+# between a start and an end position
 def find_variants_for_feature(start, end, pos_list):
     assert start <= end
 
@@ -100,7 +131,6 @@ def find_variants_for_feature(start, end, pos_list):
     upper_bound_variants = bisect.bisect_right(pos_list, end, lo=lower_bound_variants)
 
     return lower_bound_variants, upper_bound_variants
-
 
 # Returns the codon, and alternative codon of a sequence with SNP
 # Input sequence should already be adjusted to start at the first codon and continue until at least the last codon the snp could be located at
@@ -213,32 +243,27 @@ def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, fo
                 
                 #prot_seq1 = Seq(seq).translate()
                 for pos in cds_variants:
-                    relative_pos = pos - pos_adjust
-                    ref = str(chromosome_variants['variants'][pos]['ref']).upper()
+                    ref = chromosome_variants['variants'][pos]['ref']
                     for alts in chromosome_variants['variants'][pos]['alts']:
                         for alt in alts:
                             # base at the position of the variant, to check that the reference matches
+                            relative_pos = pos - pos_adjust
                             seq_ref = seq_adj[relative_pos]
 
                             if mRNA.strand == '-':
                                 relative_pos = len(seq_adj) - relative_pos #+ 2
                                 seq_ref = seq_adj[relative_pos]
                                 seq_ref = COMP_DICT[seq_ref]
-                                #print(ref)
-                                #print(seq_adj[-relative_pos-5:-relative_pos+5])
                             
                             if ref == seq_ref:
-                                alt = str(alt).upper()
-                                
                                 if mRNA.strand == '+':
                                     codons = get_alt_codon(seq_adj, relative_pos, alt)
+                                    protein_loc = math.ceil(relative_pos / 3)
                                 else:
                                     comp_alt = COMP_DICT[alt]
                                     codons = get_alt_codon(seq_adj, relative_pos, comp_alt)
-                                    relative_pos += 1
-                                    #relative_pos = len(seq_adj) - relative_pos + 1
-
-                                protein_loc = math.ceil(relative_pos / 3)
+                                    #relative_pos += 1 #Neccesssary t
+                                    protein_loc = math.ceil((relative_pos + 1) / 3)
                                 
                                 ref_amino = str(Seq(codons[0]).translate())
                                 alt_amino = str(Seq(codons[1]).translate())
@@ -268,7 +293,7 @@ def write_coding_variants(db, cds, gene, chromosome_variants, results_writer, fo
                     print(parent.featuretype)
     return results_writer, cds_count, cds_mismatch, count, syn_v, nonsyn_v
 
-def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename):
+def create_variants_report(variants_chromosome_dict, db, genome_fasta, results_filename):
     try:
         #for feature in db.all
         # if not isfile(results_filename):
@@ -336,7 +361,6 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
                                 #results_writer.writerow([str(gene.chrom),str(pos),ref,alt,'Synonymous',gene.id,'NA',ref_codon,'NA'])
                     
             for chrom in variants_chromosome_dict:
-                print(chrom)
                 cnt = 0
                 for found_variant in variants_chromosome_dict[chrom]['found_pos']:
                     if cnt < 2:
@@ -379,7 +403,7 @@ def sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results
             total = syn_v + nonsyn_v + non_coding
             logger.info(f'{total} total variants')
             if cds_mismatch > 0:
-                logger.error(f'{cds_mismatch} variant(s) have non-matching reference to refernence coding regions and were excluded')
+                logger.error(f'{cds_mismatch} variant(s) have non-matching reference to reference coding regions and were excluded')
            
     except Exception as err:
         logger.error(f'Error generating results: {err}; {traceback.format_exc}')
@@ -394,46 +418,92 @@ def check_results(results_filename):
         for result in results_reader:
             pos = f'{result[0]}: {result[1]}'
             if pos in pos_list:
-                print(pos)
+                if result[4] == 'Non-Coding':
+                    print(pos)
             else:
                 pos_list.append(pos)
 
+#### TESTING FUNCTIONS ###
+
+# def create_testing_files():
+#     with open(TEST_VCF_FILENAME, 'w', newline='') as test_file:
+#         # test_vcf_reader = vcf.Reader(test_file)
+#         # test_vcf_writer = vcf.Writer(open('/dev/null', 'w'), 'a')
+#         # for variant in TEST_VARIANTS:
+#         #     record = vcf.model._Record('Chrom1','10','.','A','T','123','.','.')
+#         #     test_vcf_writer.write_record(vcf.variant)
+
+
+def test_get_variants(vcf_filename, logger):
+    try:
+        variants_chromosome_dict, q_count, non_q_count = get_variants(vcf_filename, logger)
+        assert 'Pf3D7_10_v3' in variants_chromosome_dict.keys()
+        assert variants_chromosome_dict['Pf3D7_10_v3']['variants'][1468717]['ref'] == 'C'
+        return True
+    except Exception as err:
+        logger.error(f'Error occurred testing get_variants: {err}')
+        return False
+
+def test_get_feature_db(gff_filename, logger):
+    try:
+        db = get_feature_db(gff_filename)
+        assert type(db) == gff.interface.FeatureDB
+        return db
+    except Exception as err:
+        logger.error(f'Error occurred testing get_feature_db: {err}')
+        return False
+
+def test_find_variants_for_feature(logger):
+    try:
+        lower_upper_bounds = find_variants_for_feature(10,13,TEST_POS_LIST)
+        assert lower_upper_bounds == (3,5)
+        return True
+    except Exception as err:
+        logger.error(f'Error occurred testing find_variants_for_feature: {err}')
+        return False
+
+def test_get_alt_codon(logger):
+    try:
+        codons = get_alt_codon(TEST_SEQ,4,'C')
+        assert codons == ('TTT','TCT')
+        return True
+    except Exception as err:
+        logger.error(f'Error occurred testing get_alt_codon: {err}')
+        return False
+
+def run_tests(logger):
+    vcf_filename = './data/Toy_Data/testData.vcf'
+
+    #create_testing_files()
+    test_results = []
+    test_results.append(test_get_variants(vcf_filename, logger))
+    test_results.append(test_find_variants_for_feature(logger))
+    test_results.append(test_get_alt_codon(logger))
+
+    test_db = test_get_feature_db(gff_filename,logger)
+    test_results.append(test_db)
+
+    if False in test_results:
+        raise Exception('One or more tests failed, see log for details')
 
 if __name__ == '__main__':
-    #vcf_filename = './data/Toy_Data/testData.vcf'
-    vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
+    vcf_filename = './data/Toy_Data/testData2.vcf'
+    #vcf_filename = './data/Assessment_Data/assessmentData.vcf.gz'
     gff_filename = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7.gff'
     genome_fasta = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta'
     results_filename = './results.tsv'
-    chromosome_filepath = './data/Genome_files/PlasmoDB-54_Pfalciparum3D7_Genome.fasta.fai'
     
 
     logger = logging.getLogger()
     logging.basicConfig(filename='log.txt', encoding='utf-8', filemode="w", format='%(levelname)s - %(asctime)s - %(message)s', level=logging.INFO)
-    #logger.setLevel(logging.INFO)
-    #handler = logging.StreamHandler()
-    #handler.setFormatter(logging.Formatter('%(levelname)s - %(asctime)s - %(message)s'))
-    #logger.addHandler(handler)
 
+    run_tests(logger)
 
-    variants_chromosome_dict = get_variants(vcf_filename, logger)
-    total_variants = 0
-    for chrom in variants_chromosome_dict:
-        #print(chrom)
-        total_variants += len(variants_chromosome_dict[chrom]['sorted_pos_keys'])
-        highest = 0
-        for pos in variants_chromosome_dict[chrom]['sorted_pos_keys']:
-            if pos > highest:
-                highest = pos
-            else:
-                print(pos)
-        #print(variants_chromosome_dict[chrom]['sorted_pos_keys'])
+    # variants_chromosome_dict, q_count, non_q_count = get_variants(vcf_filename, logger)
+ 
+   
+    # db = get_feature_db(gff_filename)
 
-    #print(total_variants)
-
-    #print(variants_chromosome_dict)
-    db = get_feature_db(gff_filename)
-
-    sort_variants_by_feature(variants_chromosome_dict, db, genome_fasta, results_filename)
-    check_results(results_filename)
-    print('a')
+    # create_variants_report(variants_chromosome_dict, db, genome_fasta, results_filename)
+    #check_results(results_filename)
+  
